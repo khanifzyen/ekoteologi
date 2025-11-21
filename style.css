@@ -38,23 +38,22 @@ body {
     border: 8px solid #333;
 }
 
-/* Shared Components */
-.btn {
-    padding: 12px 24px;
-    border-radius: 25px;
-    border: none;
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.2s;
-}
+/* Responsive adjustments for mobile devices */
+@media (max-width: 480px) {
+    body {
+        background-color: var(--bg-green); /* Match the frame's bg */
+        display: block;
+        min-height: auto;
+    }
 
-.btn-primary {
-    background-color: var(--primary-green);
-    color: var(--white);
-}
-
-.btn-primary:hover {
-    background-color: #1b5e20;
+    .mobile-frame {
+        width: 100%;
+        height: 100vh; /* Fallback for older browsers */
+        height: 100dvh; /* Dynamic viewport height */
+        border-radius: 0;
+        box-shadow: none;
+        border: none;
+    }
 }
 
 /* Bottom Navigation */
