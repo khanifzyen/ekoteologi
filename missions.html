@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aksi Nyata & Misi</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE MISI & GAMIFIKASI --- */
+
+        /* Header Area */
+        .mission-header {
+            background: var(--primary-green);
+            padding: 30px 20px 20px 20px;
+            color: white;
+            border-bottom-left-radius: 25px;
+            border-bottom-right-radius: 25px;
+        }
+
+        .mission-header h2 {
+            font-family: 'Montserrat';
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        /* Progress Bar Mingguan */
+        .weekly-progress-card {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 15px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .p-bar-track {
+            height: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .p-bar-fill {
+            height: 100%;
+            background: var(--gold);
+            width: 60%;
+            border-radius: 10px;
+            transition: width 1s ease-in-out;
+        }
+
+        /* TABS */
+        .mission-tabs {
+            display: flex;
+            background: white;
+            margin: 20px;
+            padding: 5px;
+            border-radius: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .m-tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            border-radius: 25px;
+            font-weight: 600;
+            color: #777;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 13px;
+        }
+
+        .m-tab-btn.active {
+            background: var(--primary-green);
+            color: white;
+            box-shadow: 0 4px 10px rgba(46, 125, 50, 0.3);
+        }
+
+        /* LIST VIEW (CHECKLIST) */
+        .content-scroll-area {
+            padding: 0 20px 100px 20px;
+            overflow-y: auto;
+            height: calc(100% - 230px);
+            /* Menyesuaikan sisa layar */
+        }
+
+        .mission-card {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+            transition: 0.2s;
+            border-left: 4px solid transparent;
+        }
+
+        .mission-card.done {
+            background: #F1F8E9;
+            border-left-color: var(--primary-green);
+        }
+
+        .m-icon-box {
+            width: 45px;
+            height: 45px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-green);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .mission-card.done .m-icon-box {
+            background: #C8E6C9;
+            color: #1B5E20;
+        }
+
+        .m-text {
+            flex: 1;
+            margin-left: 15px;
+        }
+
+        .m-text h4 {
+            font-size: 14px;
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+
+        .m-text p {
+            font-size: 11px;
+            margin: 0;
+            color: #888;
+        }
+
+        .m-text .points {
+            color: var(--gold);
+            font-weight: bold;
+            font-size: 10px;
+            background: #FFF8E1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 5px;
+        }
+
+        .check-circle {
+            width: 25px;
+            height: 25px;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mission-card.done .check-circle {
+            background: var(--primary-green);
+            border-color: var(--primary-green);
+            color: white;
+        }
+
+        /* UPLOAD BUTTON STYLE */
+        .upload-btn-small {
+            background: var(--primary-green);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 10px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        /* BADGE GRID (PENCAPAIAN) */
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding-top: 10px;
+        }
+
+        .badge-item {
+            background: white;
+            border-radius: 15px;
+            padding: 15px 5px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .badge-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #FFC107, #FF9800);
+            /* Gold Gradient */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            margin-bottom: 10px;
+            border: 3px solid #FFF8E1;
+            box-shadow: 0 4px 10px rgba(255, 193, 7, 0.3);
+        }
+
+        /* Locked State */
+        .badge-item.locked .badge-icon {
+            background: #e0e0e0;
+            /* Gray */
+            border-color: #eee;
+            box-shadow: none;
+            filter: grayscale(100%);
+            opacity: 0.6;
+        }
+
+        .badge-item.locked h5 {
+            color: #999;
+        }
+
+        .badge-item h5 {
+            font-size: 11px;
+            margin: 0;
+            color: var(--dark-text);
+            font-family: 'Montserrat';
+        }
+
+        .badge-item span {
+            font-size: 9px;
+            color: #777;
+            margin-top: 3px;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- 1. Header & Progress -->
+        <div class="mission-header">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Aksi Nyata</h2>
+                <i class="fas fa-info-circle" style="opacity:0.8;"></i>
+            </div>
+
+            <!-- Progress Mingguan -->
+            <div class="weekly-progress-card">
+                <div class="progress-info">
+                    <span>Progress Mingguan (Istiqomah)</span>
+                    <span>4 / 7 Hari</span>
+                </div>
+                <div class="p-bar-track">
+                    <div class="p-bar-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Tabs -->
+        <div class="mission-tabs">
+            <button class="m-tab-btn active" onclick="switchTab('harian', this)">Hari Ini</button>
+            <button class="m-tab-btn" onclick="switchTab('pencapaian', this)">Pencapaian</button>
+        </div>
+
+        <!-- 3. Content Area -->
+        <div class="content-scroll-area">
+
+            <!-- TAB KONTEN: MISI HARIAN -->
+            <div id="tab-harian" class="tab-content">
+
+                <!-- Misi 1 -->
+                <div class="mission-card" id="misi1">
+                    <div class="m-icon-box"><i class="fas fa-expand"></i></div>
+                    <div class="m-text">
+                        <h4>Scan 3 Jenis Sampah</h4>
+                        <p>Gunakan AR Scanner pada sampah berbeda.</p>
+                        <span class="points">+15 Poin</span>
+                        <div style="margin-top:5px; font-size:10px; color:var(--primary-green);">
+                            Progress: 1/3
+                        </div>
+                    </div>
+                    <div class="check-circle" onclick="completeMission('misi1')">
+                        <i class="fas fa-check" style="font-size:12px;"></i>
+                    </div>
+                </div>
+
+                <!-- Misi 2 (Upload Foto) -->
+                <div class="mission-card" id="misi2">
+                    <div class="m-icon-box"><i class="fas fa-wine-bottle"></i></div>
+                    <div class="m-text">
+                        <h4>Bawa Tumbler Sendiri</h4>
+                        <p>Kurangi plastik sekali pakai.</p>
+                        <span class="points">+20 Poin</span>
+                        <!-- Input File Hidden -->
+                        <input type="file" id="uploadTumbler" style="display:none;" onchange="handleUpload('misi2')">
+                        <br>
+                        <button class="upload-btn-small" onclick="document.getElementById('uploadTumbler').click()">
+                            <i class="fas fa-camera"></i> Upload Bukti
+                        </button>
+                    </div>
+                    <div class="check-circle" id="check2">
+                        <i class="fas fa-check" style="font-size:12px;"></i>
+                    </div>
+                </div>
+
+                <!-- Misi 3 (Link ke Artikel) -->
+                <div class="mission-card" id="misi3">
+                    <div class="m-icon-box"><i class="fas fa-book-open"></i></div>
+                    <div class="m-text">
+                        <h4>Baca Fiqih Lingkungan</h4>
+                        <p>Pahami hukum air sungai.</p>
+                        <span class="points">+10 Poin</span>
+                        <br>
+                        <a href="elearning.html"
+                            style="font-size:10px; color:var(--primary-green); text-decoration:none;">Pergi ke Materi
+                            ></a>
+                    </div>
+                    <div class="check-circle" onclick="completeMission('misi3')">
+                        <i class="fas fa-check" style="font-size:12px;"></i>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB KONTEN: PENCAPAIAN (BADGES) -->
+            <div id="tab-pencapaian" class="tab-content" style="display:none;">
+                <h4 style="margin-bottom:15px; font-family:'Montserrat'; font-size:14px;">Koleksi Lencana Anda</h4>
+
+                <div class="badge-grid">
+                    <!-- Badge 1: Unlocked -->
+                    <div class="badge-item">
+                        <div class="badge-icon">
+                            <i class="fas fa-recycle"></i>
+                        </div>
+                        <h5>Recycle Rookie</h5>
+                        <span style="color:green;">Tercapai</span>
+                    </div>
+
+                    <!-- Badge 2: Locked -->
+                    <div class="badge-item locked">
+                        <div class="badge-icon">
+                            <i class="fas fa-mosque"></i>
+                        </div>
+                        <h5>Masjid Cleaner</h5>
+                        <span>Bersihkan 5 Masjid</span>
+                    </div>
+
+                    <!-- Badge 3: Locked -->
+                    <div class="badge-item locked">
+                        <div class="badge-icon">
+                            <i class="fas fa-globe-asia"></i>
+                        </div>
+                        <h5>Eco-Mujahid</h5>
+                        <span>Level Tertinggi</span>
+                    </div>
+
+                    <!-- Badge 4: Locked -->
+                    <div class="badge-item locked">
+                        <div class="badge-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <h5>Community Leader</h5>
+                        <span>Ajak 10 Teman</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <a href="home.html" class="nav-item">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="elearning.html" class="nav-item">
+                <i class="fas fa-book-quran"></i>
+                <span>Elearning</span>
+            </a>
+            <!-- Placeholder for the floating button -->
+            <div class="nav-item-placeholder"></div>
+            <a href="missions.html" class="nav-item active">
+                <i class="fas fa-bullseye"></i>
+                <span>Misi</span>
+            </a>
+            <a href="profile.html" class="nav-item">
+                <i class="fas fa-user"></i>
+                <span>Profil</span>
+            </a>
+        </nav>
+        <!-- Floating AR Button -->
+        <div class="nav-floating-btn" onclick="window.location.href='ar.html'">
+            <i class="fas fa-camera"></i>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // LOGIC HALAMAN MISI
+
+        // 1. Switch Tab Logic
+        function switchTab(tabName, btn) {
+            // Reset tombol tab
+            document.querySelectorAll('.m-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Hide semua konten
+            document.getElementById('tab-harian').style.display = 'none';
+            document.getElementById('tab-pencapaian').style.display = 'none';
+
+            // Show konten yang dipilih
+            document.getElementById('tab-' + tabName).style.display = 'block';
+        }
+
+        // 2. Complete Mission Logic (Ceklis Biasa)
+        function completeMission(id) {
+            const card = document.getElementById(id);
+
+            // Jika belum selesai, tandai selesai
+            if (!card.classList.contains('done')) {
+                card.classList.add('done');
+                // Efek visual feedback
+                const checkIcon = card.querySelector('.check-circle');
+                checkIcon.innerHTML = '<i class="fas fa-check"></i>';
+
+                alert("Misi Selesai! Poin ditambahkan.");
+            }
+        }
+
+        // 3. Handle Upload (Simulasi)
+        function handleUpload(id) {
+            const input = document.getElementById('uploadTumbler');
+            if (input.files && input.files[0]) {
+                // Simulasi loading upload
+                const btn = document.querySelector(`#${id} .upload-btn-small`);
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengunggah...';
+
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-check"></i> Terkirim';
+                    btn.style.background = '#ccc';
+                    btn.disabled = true;
+
+                    // Tandai Card Selesai
+                    completeMission(id);
+                }, 1500);
+            }
+        }
+    </script>
+</body>
+
+</html>

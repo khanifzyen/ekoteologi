@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Ekoteologi</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome & Google Fonts (Montserrat) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE KHUSUS DASHBOARD --- */
+
+        /* 1. Header Curved */
+        .header-curved {
+            background: linear-gradient(180deg, var(--primary-green) 0%, #1B5E20 100%);
+            padding: 40px 25px 70px 25px;
+            /* Padding bawah besar untuk efek melengkung */
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            color: white;
+            position: relative;
+            box-shadow: 0 10px 20px rgba(46, 125, 50, 0.2);
+            z-index: 2;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-info h3 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        /* Badge Level Styles */
+        .level-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .points-display {
+            text-align: right;
+        }
+
+        .points-display h2 {
+            color: var(--gold);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 28px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .points-display span {
+            font-size: 12px;
+            color: #C8E6C9;
+        }
+
+        /* Container Konten (biar menumpuk di atas header lengkung) */
+        .content-container {
+            margin-top: -50px;
+            /* Negative margin is key */
+            padding: 0 20px 100px 20px;
+            /* Bottom padding for nav bar space */
+            position: relative;
+            z-index: 3;
+            overflow-y: auto;
+            height: 100%;
+            scrollbar-width: none;
+            /* Hide scrollbar */
+        }
+
+        .content-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 2. Daily Wisdom Card (Islamic Pattern) */
+        .wisdom-card {
+            background-color: #ffffff;
+            /* Pola Geometris CSS Sederhana */
+            background-image: radial-gradient(#2E7D32 1px, transparent 1px), radial-gradient(#2E7D32 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            background-color: #f8fff8;
+            /* Warna dasar */
+
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+
+        /* Overlay putih transparan biar teks terbaca di atas pola */
+        .wisdom-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.92);
+            z-index: 0;
+        }
+
+        .wisdom-content {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .wisdom-text {
+            font-family: 'Georgia', serif;
+            font-style: italic;
+            color: var(--dark-text);
+            font-size: 15px;
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+
+        .share-btn {
+            background: none;
+            border: none;
+            color: var(--primary-green);
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 3. Grid Menu */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .menu-card {
+            background: white;
+            padding: 20px 15px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 130px;
+        }
+
+        .menu-card:active {
+            transform: scale(0.95);
+        }
+
+        /* Gaya Spesifik Menu */
+        .menu-ar {
+            background: linear-gradient(135deg, #2E7D32 0%, #66BB6A 100%);
+            color: white;
+            grid-column: span 2;
+            /* Lebar penuh jika mau, atau 1 kotak tapi menonjol */
+            /* Sesuai request "Grid 2x2", kita buat AR di posisi 1 dengan style beda */
+            border: 2px solid #fff;
+            box-shadow: 0 8px 20px rgba(46, 125, 50, 0.3);
+        }
+
+        .menu-ar i {
+            color: white !important;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .menu-card i {
+            color: var(--primary-green);
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .menu-card h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* 4. Widget Pohon Kebaikan */
+        .tree-widget {
+            background: white;
+            border-radius: 20px;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .tree-icon-area {
+            width: 50px;
+            height: 50px;
+            background: #E8F5E9;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-green);
+            font-size: 24px;
+        }
+
+        .tree-info {
+            flex: 1;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            width: 60%;
+            height: 100%;
+            background: var(--gold);
+            border-radius: 4px;
+        }
+
+        /* Floating Action Button (Alternative Navigation Style) */
+        .nav-floating-btn {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 65px;
+            height: 65px;
+            background: var(--gold);
+            border-radius: 50%;
+            border: 5px solid #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--dark-text);
+            font-size: 24px;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- 1. Header Curved -->
+        <div class="header-curved">
+            <div class="header-top">
+                <div class="user-info">
+                    <h3>Assalamu'alaikum, <br>Santri Teladan</h3>
+                    <div class="level-badge">
+                        <i class="fas fa-seedling" style="color: #C8E6C9;"></i> Level: Eco-Warrior
+                    </div>
+                </div>
+                <div class="user-avatar">
+                    <!-- Placeholder Avatar -->
+                    <div
+                        style="width: 45px; height: 45px; background: white; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold);">
+                        <img src="https://img.freepik.com/free-photo/portrait-young-asian-man-student-holding-books-smiling-camera_1258-97204.jpg"
+                            alt="User" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                </div>
+            </div>
+            <div class="points-display">
+                <h2>1.250</h2>
+                <span>Poin Kebaikan</span>
+            </div>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="content-container">
+
+            <!-- 2. Daily Wisdom Card -->
+            <div class="wisdom-card">
+                <div class="wisdom-content">
+                    <h5
+                        style="color: var(--primary-green); text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">
+                        Daily Wisdom</h5>
+                    <p class="wisdom-text">"Sesungguhnya Allah itu indah dan menyukai keindahan (termasuk kebersihan)."
+                    </p>
+                    <small style="color: #777;">- HR. Muslim</small>
+                    <div style="margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px;">
+                        <button class="share-btn" onclick="shareToWA()">
+                            <i class="fab fa-whatsapp"></i> Bagikan Kebaikan
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Widget Pohon Kebaikan -->
+            <div class="tree-widget">
+                <div class="tree-icon-area">
+                    <i class="fas fa-tree"></i>
+                </div>
+                <div class="tree-info">
+                    <h4 style="font-size: 14px; margin:0;">Pohon Mangga Virtual</h4>
+                    <p style="font-size: 11px; color: #777; margin: 2px 0;">Butuh <strong>2 Misi</strong> lagi untuk
+                        tumbuh!</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <br>
+
+            <!-- 4. Menu Utama Grid 2x2 -->
+            <h4 style="margin-bottom: 10px; color: #333; font-family: 'Montserrat';">Menu Utama</h4>
+            <div class="menu-grid">
+                <!-- AR Scanner (Prominent) -->
+                <div class="menu-card menu-ar" onclick="window.location.href='ar.html'">
+                    <i class="fas fa-camera"></i>
+                    <h4>AR Scanner</h4>
+                    <span style="font-size: 10px; opacity: 0.8;">Mulai Scan</span>
+                </div>
+
+                <!-- E-Learning -->
+                <div class="menu-card" onclick="window.location.href='elearning.html'">
+                    <i class="fas fa-book-quran"></i> <!-- Ikon Buku + Quran -->
+                    <h4>E-Learning</h4>
+                </div>
+
+                <!-- Misi Harian -->
+                <div class="menu-card" onclick="window.location.href='missions.html'">
+                    <i class="fas fa-bullseye"></i>
+                    <h4>Misi Harian</h4>
+                </div>
+
+                <!-- Peta -->
+                <div class="menu-card" onclick="window.location.href='community.html'">
+                    <i class="fas fa-map-location-dot"></i>
+                    <h4>Bank Sampah</h4>
+                </div>
+            </div>
+
+            <div style="height: 50px;"></div> <!-- Spacer untuk tombol floating -->
+        </div>
+
+        <!-- 5. Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <a href="home.html" class="nav-item active">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="elearning.html" class="nav-item">
+                <i class="fas fa-book-quran"></i>
+                <span>Elearning</span>
+            </a>
+            <!-- Placeholder for the floating button -->
+            <div class="nav-item-placeholder"></div>
+            <a href="missions.html" class="nav-item">
+                <i class="fas fa-bullseye"></i>
+                <span>Misi</span>
+            </a>
+            <a href="profile.html" class="nav-item">
+                <i class="fas fa-user"></i>
+                <span>Profil</span>
+            </a>
+        </nav>
+        <!-- Floating AR Button -->
+        <div class="nav-floating-btn" onclick="window.location.href='ar.html'">
+            <i class="fas fa-camera"></i>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // Logic untuk tombol Share WA
+        function shareToWA() {
+            const text = encodeURIComponent("Assalamualaikum, hari ini saya belajar: 'Sesungguhnya Allah itu indah dan menyukai keindahan'. Yuk jaga lingkungan bareng di aplikasi Ekoteologi!");
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+    </script>
+</body>
+
+</html>

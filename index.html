@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ekoteologi AR - Onboarding</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- FontAwesome untuk Aset Visual -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* CSS KHUSUS HALAMAN INI */
+
+        /* 1. Splash Screen Overlay */
+        #splash-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--primary-green);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 999;
+            transition: opacity 0.8s ease-out;
+        }
+
+        /* 2. Onboarding Container */
+        .onboarding-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            padding: 30px;
+            text-align: center;
+            background-color: var(--bg-green);
+            /* Light Green Pudar */
+            opacity: 0;
+            /* Hidden awal, muncul setelah splash */
+            transition: opacity 0.5s;
+        }
+
+        /* 3. Visual Ilustrasi (Menggunakan FontAwesome Stack) */
+        .illustration-wrapper {
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        /* Menggabungkan beberapa ikon untuk membuat 'Ilustrasi' */
+        .illustration-wrapper i {
+            color: var(--primary-green);
+            filter: drop-shadow(0 10px 15px rgba(46, 125, 50, 0.2));
+        }
+
+        /* Typography */
+        h2 {
+            color: var(--dark-text);
+            font-size: 22px;
+            margin-bottom: 10px;
+            font-weight: 800;
+        }
+
+        p {
+            color: var(--gray);
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+
+        /* Dots Indicator */
+        .dots {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            background-color: #C8E6C9;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background-color: var(--primary-green);
+            width: 25px;
+            /* Efek memanjang saat aktif */
+            border-radius: 10px;
+        }
+
+        /* Slide Logic */
+        .slide {
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .slide.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Tombol Full Width */
+        .btn-full {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border-radius: 50px;
+            /* Rounded Corner Kuat */
+            box-shadow: 0 4px 15px rgba(46, 125, 50, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- BAGIAN 1: SPLASH SCREEN LOGO -->
+        <div id="splash-screen">
+            <i class="fas fa-leaf fa-3x" style="margin-bottom: 15px;"></i>
+            <h1>Ekoteologi AR</h1>
+            <p style="color: rgba(255,255,255,0.8); font-size: 12px; margin-top:0;">Membentuk Generasi Khalifah</p>
+        </div>
+
+        <!-- BAGIAN 2: ONBOARDING SLIDER -->
+        <div class="onboarding-container" id="onboarding-content">
+
+            <!-- Slide 1 -->
+            <div class="slide active" id="slide1">
+                <div class="illustration-wrapper">
+                    <!-- Visualisasi Santri Scan Sampah -->
+                    <span class="fa-stack fa-4x">
+                        <i class="fas fa-mobile-alt fa-stack-2x" style="transform: translateY(10px);"></i>
+                        <i class="fas fa-expand fa-stack-1x"
+                            style="color: var(--gold); transform: scale(0.5) translateY(-10px);"></i>
+                        <i class="fas fa-leaf fa-stack-1x"
+                            style="color: var(--light-green); transform: translate(40px, 10px) scale(0.6);"></i>
+                    </span>
+                </div>
+                <h2>Lihat Dunia dengan Cara Baru</h2>
+                <p>Gunakan kamera AR untuk mengenali sampah dan memahami dampaknya bagi bumi.</p>
+            </div>
+
+            <!-- Slide 2 -->
+            <div class="slide" id="slide2">
+                <div class="illustration-wrapper">
+                    <!-- Visualisasi Khalifah (Tangan menjaga Bumi) -->
+                    <span class="fa-stack fa-4x">
+                        <i class="fas fa-globe-asia fa-stack-2x" style="color: var(--light-green);"></i>
+                        <i class="fas fa-hands fa-stack-2x"
+                            style="color: var(--primary-green); transform: translateY(20px) scale(1.2);"></i>
+                    </span>
+                </div>
+                <h2>Amanah Khalifah di Bumi</h2>
+                <p>Menjaga kebersihan bukan sekadar hobi, tapi ibadah dan tanggung jawab kita kepada Sang Pencipta.</p>
+            </div>
+
+            <!-- Slide 3 -->
+            <div class="slide" id="slide3">
+                <div class="illustration-wrapper">
+                    <!-- Visualisasi Reward & Pohon -->
+                    <span class="fa-stack fa-4x">
+                        <i class="fas fa-tree fa-stack-2x"></i>
+                        <i class="fas fa-star fa-stack-1x"
+                            style="color: var(--gold); transform: translate(30px, -30px);"></i>
+                        <i class="fas fa-star fa-stack-1x"
+                            style="color: var(--gold); transform: translate(-30px, -10px) scale(0.7);"></i>
+                    </span>
+                </div>
+                <h2>Aksi Nyata Berbuah Pahala</h2>
+                <p>Kumpulkan poin kebaikan, tanam pohon virtual, dan berkontribusi untuk lingkungan sekitar.</p>
+            </div>
+
+            <!-- Indikator Dots -->
+            <div class="dots">
+                <div class="dot active" id="dot1"></div>
+                <div class="dot" id="dot2"></div>
+                <div class="dot" id="dot3"></div>
+            </div>
+
+            <!-- Tombol Aksi -->
+            <button class="btn btn-primary btn-full" id="actionBtn" onclick="nextSlide()">
+                Lanjut <i class="fas fa-arrow-right" style="margin-left:8px;"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Script Logic -->
+    <script src="script.js"></script>
+    <script>
+        // Logic Splash Screen
+        document.addEventListener("DOMContentLoaded", () => {
+            const splash = document.getElementById('splash-screen');
+            const content = document.getElementById('onboarding-content');
+
+            setTimeout(() => {
+                splash.style.opacity = '0'; // Fade out logo
+                setTimeout(() => {
+                    splash.style.display = 'none'; // Hapus dari DOM
+                    content.style.opacity = '1';   // Munculkan konten slider
+                }, 800);
+            }, 2000); // Durasi splash screen 2 detik
+        });
+
+        // Logic Slider
+        let currentSlide = 1;
+        const totalSlides = 3;
+        const btn = document.getElementById('actionBtn');
+
+        function nextSlide() {
+            // Jika belum slide terakhir, pindah ke slide berikutnya
+            if (currentSlide < totalSlides) {
+                // Sembunyikan slide saat ini
+                document.getElementById(`slide${currentSlide}`).classList.remove('active');
+                document.getElementById(`dot${currentSlide}`).classList.remove('active');
+
+                // Pindah counter
+                currentSlide++;
+
+                // Tampilkan slide baru
+                document.getElementById(`slide${currentSlide}`).classList.add('active');
+                document.getElementById(`dot${currentSlide}`).classList.add('active');
+
+                // Cek apakah sudah di slide terakhir (3)
+                if (currentSlide === totalSlides) {
+                    btn.innerHTML = 'Mulai Perjalanan'; // Ganti teks tombol
+                    btn.style.backgroundColor = '#FFC107'; // Ubah warna jadi Gold (opsional, biar beda)
+                    btn.style.color = '#1B5E20';
+                }
+            }
+            // Jika sudah slide terakhir, pindah halaman
+            else {
+                // Efek transisi visual sebelum pindah (opsional)
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat...';
+                setTimeout(() => {
+                    window.location.href = 'home.html';
+                }, 500);
+            }
+        }
+    </script>
+</body>
+
+</html>

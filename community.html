@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Komunitas & Peta</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE KOMUNITAS & PETA --- */
+
+        /* WRAPPER UTAMA AGAR BISA SCROLL */
+        .main-scroll-wrapper {
+            height: 100%;
+            overflow-y: auto;
+            /* Kunci agar bisa di-scroll */
+            position: relative;
+            padding-bottom: 80px;
+            /* Spacer agar konten terbawah tidak tertutup nav */
+            scrollbar-width: none;
+        }
+
+        .main-scroll-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 1. MAP SECTION */
+        .map-container {
+            width: 100%;
+            height: 350px;
+            /* Tinggi peta */
+            background-color: #212121;
+            /* Default Dark Mode Image */
+            background-image: url('https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/14/8494/5785.png');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            transition: background-image 0.5s ease;
+            /* Transisi halus saat ganti tema */
+        }
+
+        /* Header Overlay di Peta */
+        .map-overlay-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+        }
+
+        .map-overlay-header h3 {
+            font-family: 'Montserrat';
+            font-size: 14px;
+            margin: 0;
+            color: #333;
+        }
+
+        /* Tombol Toggle Theme */
+        .theme-toggle-btn {
+            background: #eee;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+
+        .theme-toggle-btn.dark {
+            background: #333;
+            color: white;
+        }
+
+        .theme-toggle-btn.light {
+            background: #FFEB3B;
+            color: #333;
+        }
+
+        /* PIN LOKASI */
+        .map-pin {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            z-index: 2;
+        }
+
+        .map-pin:hover {
+            transform: scale(1.2) translateY(-8px);
+            z-index: 10;
+        }
+
+        .pin-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border: 2px solid white;
+        }
+
+        .pin-icon i {
+            transform: rotate(45deg);
+            font-size: 16px;
+            color: white;
+        }
+
+        /* Warna Pin */
+        .pin-bank {
+            background: #FFC107;
+        }
+
+        /* Emas */
+        .pin-masjid {
+            background: #2E7D32;
+        }
+
+        /* Hijau */
+
+        /* Popup Info Lokasi */
+        .location-popup {
+            position: absolute;
+            bottom: 40px;
+            left: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            animation: slideUp 0.3s;
+            z-index: 20;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .loc-title {
+            font-weight: bold;
+            font-family: 'Montserrat';
+            color: #333;
+            font-size: 14px;
+        }
+
+        .loc-desc {
+            font-size: 12px;
+            color: #666;
+            margin: 5px 0;
+        }
+
+        .btn-route {
+            background: var(--primary-green);
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* 2. SCROLL CONTENT (Calculator & Leaderboard) */
+        .scroll-content {
+            padding: 25px 20px 20px 20px;
+            background: #F1F8E9;
+            /* Light Green bg */
+            min-height: 500px;
+            /* Pastikan cukup tinggi */
+            border-top-left-radius: 30px;
+            border-top-right-radius: 30px;
+            margin-top: -30px;
+            /* Overlap ke atas peta */
+            position: relative;
+            z-index: 6;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        /* KALKULATOR SAMPAH */
+        .calculator-card {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+        }
+
+        .calc-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed #ddd;
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background: #FAFAFA;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-green);
+            background: white;
+        }
+
+        .result-box {
+            background: #E8F5E9;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 15px;
+            border: 1px solid var(--primary-green);
+            display: none;
+        }
+
+        .result-money {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-green);
+            display: block;
+        }
+
+        /* LEADERBOARD */
+        .leaderboard-section h3 {
+            font-family: 'Montserrat';
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .rank-item {
+            display: flex;
+            align-items: center;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        }
+
+        .rank-num {
+            width: 30px;
+            font-weight: bold;
+            color: #888;
+            font-style: italic;
+        }
+
+        .rank-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 15px;
+            object-fit: cover;
+            border: 1px solid #eee;
+        }
+
+        .rank-info {
+            flex: 1;
+        }
+
+        .rank-name {
+            font-size: 14px;
+            font-weight: 600;
+            display: block;
+        }
+
+        .rank-points {
+            font-size: 12px;
+            color: var(--gold);
+            font-weight: bold;
+        }
+
+        /* Top 3 Styling */
+        .rank-1 {
+            border: 2px solid #FFC107;
+            background: #FFFDE7;
+            transform: scale(1.02);
+        }
+
+        .rank-1 .rank-num {
+            color: #FFC107;
+            font-size: 18px;
+        }
+
+        .rank-2 {
+            border-left: 4px solid #C0C0C0;
+        }
+
+        .rank-3 {
+            border-left: 4px solid #CD7F32;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- WRAPPER SCROLLABLE -->
+        <div class="main-scroll-wrapper">
+
+            <!-- 1. MAP SECTION -->
+            <div class="map-container" id="mapVisual">
+                <!-- Header Overlay -->
+                <div class="map-overlay-header">
+                    <h3><i class="fas fa-map-marker-alt" style="color:var(--primary-green);"></i> Peta Sekitar</h3>
+
+                    <!-- Toggle Dark/Light Mode -->
+                    <button class="theme-toggle-btn dark" id="themeBtn" onclick="toggleMapTheme()">
+                        <i class="fas fa-moon"></i> <span>Dark</span>
+                    </button>
+                </div>
+
+                <!-- Pin 1: Bank Sampah (Emas) -->
+                <div class="map-pin" style="top: 35%; left: 25%;" onclick="showLocation('bank')">
+                    <div class="pin-icon pin-bank"><i class="fas fa-balance-scale"></i></div>
+                </div>
+
+                <!-- Pin 2: Eco Masjid (Hijau) -->
+                <div class="map-pin" style="top: 55%; left: 65%;" onclick="showLocation('masjid')">
+                    <div class="pin-icon pin-masjid"><i class="fas fa-mosque"></i></div>
+                </div>
+
+                <!-- Popup Detail Lokasi -->
+                <div class="location-popup" id="locPopup">
+                    <div style="display:flex; justify-content:space-between; align-items: flex-start;">
+                        <div class="loc-title" id="popupTitle">Nama Lokasi</div>
+                        <i class="fas fa-times" onclick="closePopup()"
+                            style="color:#999; cursor:pointer; padding: 5px;"></i>
+                    </div>
+                    <p class="loc-desc" id="popupDesc">Deskripsi lokasi...</p>
+                    <div style="display:flex; gap:5px; font-size:11px; margin-bottom:10px; color:#555;">
+                        <span><i class="fas fa-star" style="color:gold;"></i> 4.8</span> •
+                        <span>0.5 km</span>
+                    </div>
+                    <button class="btn-route"><i class="fas fa-directions"></i> Rute Sekarang</button>
+                </div>
+            </div>
+
+            <!-- 2. SCROLL CONTENT -->
+            <div class="scroll-content">
+
+                <!-- A. KALKULATOR SAMPAH -->
+                <div class="calculator-card">
+                    <div class="calc-header">
+                        <div
+                            style="background:var(--primary-green); width:35px; height:35px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:white;">
+                            <i class="fas fa-calculator"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin:0; font-family:'Montserrat';">Kalkulator Sampah</h4>
+                            <span style="font-size:10px; color:#777;">Ubah sampah jadi sedekah/tabungan</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Jenis Sampah</label>
+                        <select class="form-control" id="wasteType">
+                            <option value="3000">Plastik Botol (Rp 3.000/kg)</option>
+                            <option value="2000">Kardus/Kertas (Rp 2.000/kg)</option>
+                            <option value="5000">Kaleng Aluminium (Rp 5.000/kg)</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Berat (Kg)</label>
+                        <input type="number" class="form-control" id="wasteWeight" placeholder="Contoh: 2.5">
+                    </div>
+
+                    <button class="btn btn-primary" style="width:100%;" onclick="calculateWaste()">Hitung
+                        Potensi</button>
+
+                    <div class="result-box" id="calcResult">
+                        <span style="font-size:12px; color:#555;">Potensi Rezeki:</span>
+                        <span class="result-money" id="moneyResult">Rp 0</span>
+                        <span style="font-size:10px; color:#777; margin-top:5px; display:block;">*Harga estimasi Bank
+                            Sampah Pusat</span>
+                    </div>
+                </div>
+
+                <!-- B. LEADERBOARD -->
+                <div class="leaderboard-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3>Fastabiqul Khairat</h3>
+                        <span style="font-size:10px; color:#666;">Minggu Ini</span>
+                    </div>
+
+                    <!-- Rank 1 -->
+                    <div class="rank-item rank-1">
+                        <span class="rank-num"><i class="fas fa-crown"></i> 1</span>
+                        <img src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png" class="rank-avatar">
+                        <div class="rank-info">
+                            <span class="rank-name">Ahmad Fauzan</span>
+                            <span class="rank-points">2.450 Poin</span>
+                        </div>
+                    </div>
+
+                    <!-- Rank 2 -->
+                    <div class="rank-item rank-2">
+                        <span class="rank-num">2</span>
+                        <img src="https://cdn-icons-png.flaticon.com/512/4140/4140047.png" class="rank-avatar">
+                        <div class="rank-info">
+                            <span class="rank-name">Siti Aminah</span>
+                            <span class="rank-points">1.980 Poin</span>
+                        </div>
+                    </div>
+
+                    <!-- Rank 3 -->
+                    <div class="rank-item rank-3">
+                        <span class="rank-num">3</span>
+                        <img src="https://cdn-icons-png.flaticon.com/512/3006/3006876.png" class="rank-avatar">
+                        <div class="rank-info">
+                            <span class="rank-name">Budi Santoso</span>
+                            <span class="rank-points">1.500 Poin</span>
+                        </div>
+                    </div>
+
+                    <!-- Rank 4-6 (Agar list lebih panjang & bisa dites scroll) -->
+                    <div class="rank-item">
+                        <span class="rank-num">4</span>
+                        <div style="width:40px; height:40px; background:#ccc; border-radius:50%; margin-right:15px;">
+                        </div>
+                        <div class="rank-info">
+                            <span class="rank-name">Rina Wati</span>
+                            <span class="rank-points">1.450 Poin</span>
+                        </div>
+                    </div>
+
+                    <div class="rank-item">
+                        <span class="rank-num">5</span>
+                        <div style="width:40px; height:40px; background:#ccc; border-radius:50%; margin-right:15px;">
+                        </div>
+                        <div class="rank-info">
+                            <span class="rank-name">Dimas A.</span>
+                            <span class="rank-points">1.300 Poin</span>
+                        </div>
+                    </div>
+
+                    <!-- User Rank (You) -->
+                    <div class="rank-item" style="background:#E0F2F1; border: 1px solid var(--primary-green);">
+                        <span class="rank-num">15</span>
+                        <div
+                            style="width:40px; height:40px; background:#2E7D32; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-right:15px; color:white; font-size:10px; font-weight:bold;">
+                            YOU
+                        </div>
+                        <div class="rank-info">
+                            <span class="rank-name">Saya (Santri)</span>
+                            <span class="rank-points">1.250 Poin</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <a href="home.html" class="nav-item">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="elearning.html" class="nav-item">
+                <i class="fas fa-book-quran"></i>
+                <span>Elearning</span>
+            </a>
+            <!-- Placeholder for the floating button -->
+            <div class="nav-item-placeholder"></div>
+            <a href="missions.html" class="nav-item">
+                <i class="fas fa-bullseye"></i>
+                <span>Misi</span>
+            </a>
+            <a href="profile.html" class="nav-item">
+                <i class="fas fa-user"></i>
+                <span>Profil</span>
+            </a>
+        </nav>
+        <!-- Floating AR Button -->
+        <div class="nav-floating-btn" onclick="window.location.href='ar.html'">
+            <i class="fas fa-camera"></i>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // --- LOGIC PETA & TOGGLE THEME ---
+
+        const mapVisual = document.getElementById('mapVisual');
+        const themeBtn = document.getElementById('themeBtn');
+
+        // URL Peta (CartoDB)
+        const mapDark = "url('https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/14/8494/5785.png')";
+        const mapLight = "url('https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/14/8494/5785.png')";
+
+        let isDarkMode = true;
+
+        function toggleMapTheme() {
+            if (isDarkMode) {
+                // Switch to Light
+                mapVisual.style.backgroundImage = mapLight;
+                themeBtn.className = "theme-toggle-btn light";
+                themeBtn.innerHTML = '<i class="fas fa-sun"></i> <span>Light</span>';
+                mapVisual.style.backgroundColor = "#e0e0e0"; // Warna dasar terang
+            } else {
+                // Switch to Dark
+                mapVisual.style.backgroundImage = mapDark;
+                themeBtn.className = "theme-toggle-btn dark";
+                themeBtn.innerHTML = '<i class="fas fa-moon"></i> <span>Dark</span>';
+                mapVisual.style.backgroundColor = "#212121"; // Warna dasar gelap
+            }
+            isDarkMode = !isDarkMode;
+        }
+
+        // --- LOGIC POPUP LOKASI ---
+        const locations = {
+            bank: {
+                title: "Bank Sampah Berkah",
+                desc: "Terima kardus, plastik, dan besi. Buka jam 08.00 - 16.00."
+            },
+            masjid: {
+                title: "Masjid Al-Ikhlas (Eco)",
+                desc: "Masjid ramah lingkungan dengan sistem pengelolaan air wudhu."
+            }
+        };
+
+        function showLocation(type) {
+            const popup = document.getElementById('locPopup');
+            const title = document.getElementById('popupTitle');
+            const desc = document.getElementById('popupDesc');
+
+            title.innerText = locations[type].title;
+            desc.innerText = locations[type].desc;
+
+            popup.style.display = 'block';
+        }
+
+        function closePopup() {
+            document.getElementById('locPopup').style.display = 'none';
+        }
+
+        // --- LOGIC KALKULATOR ---
+        function calculateWaste() {
+            const price = document.getElementById('wasteType').value;
+            const weight = document.getElementById('wasteWeight').value;
+            const resultBox = document.getElementById('calcResult');
+            const moneyText = document.getElementById('moneyResult');
+
+            if (weight && weight > 0) {
+                const total = price * weight;
+                const formatted = "Rp " + total.toLocaleString('id-ID');
+
+                moneyText.innerText = formatted;
+                resultBox.style.display = 'block';
+
+                resultBox.style.transform = "scale(1.05)";
+                setTimeout(() => resultBox.style.transform = "scale(1)", 200);
+            } else {
+                alert("Masukkan berat sampah yang valid (kg).");
+            }
+        }
+    </script>
+</body>
+
+</html>

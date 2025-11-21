@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Learning Ekoteologi</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE E-LEARNING --- */
+
+        /* Header Sederhana */
+        .page-header {
+            background: white;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .page-header h2 {
+            font-family: 'Montserrat';
+            font-size: 18px;
+            margin-left: 15px;
+            color: var(--dark-text);
+            margin-bottom: 0;
+        }
+
+        /* TABS KATEGORI */
+        .tabs-container {
+            display: flex;
+            padding: 15px;
+            gap: 10px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            /* Hide scrollbar */
+            background: #FAFAFA;
+        }
+
+        .tabs-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid #ddd;
+            background: white;
+            color: #777;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary-green);
+            color: white;
+            border-color: var(--primary-green);
+        }
+
+        /* LIST VIEW (DAFTAR ARTIKEL) */
+        .article-list {
+            padding: 0 15px 100px 15px;
+            /* Padding bawah besar supaya tidak tertutup nav */
+            overflow-y: auto;
+            height: calc(100% - 130px);
+            /* Sisa tinggi layar */
+        }
+
+        .news-card {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .news-card:active {
+            transform: scale(0.98);
+        }
+
+        .news-thumb {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: #eee;
+        }
+
+        .news-content {
+            margin-left: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .news-cat {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--primary-green);
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .news-title {
+            font-family: 'Montserrat';
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+
+        .news-meta {
+            font-size: 10px;
+            color: #999;
+        }
+
+        /* --- DETAIL VIEW (PERBAIKAN SCROLL) --- */
+        #articleView {
+            display: none;
+            /* Hidden by default */
+            background: white;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Full height frame */
+            z-index: 200;
+            overflow-y: auto;
+            /* KUNCI AGAR BISA DI-SCROLL */
+            animation: slideUp 0.3s ease-out;
+            padding-bottom: 40px;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .article-hero {
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+        }
+
+        .article-body {
+            padding: 25px 20px 50px 20px;
+        }
+
+        .article-title-big {
+            font-family: 'Montserrat';
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--dark-text);
+            margin-bottom: 15px;
+            line-height: 1.3;
+        }
+
+        .article-text {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #444;
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background-color: #FFFDE7;
+            border-left: 4px solid #FBC02D;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .highlight-icon {
+            color: #FBC02D;
+            font-size: 20px;
+            margin-top: 2px;
+        }
+
+        .highlight-content h4 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+            color: #F57F17;
+        }
+
+        .highlight-content p {
+            margin: 0;
+            font-size: 13px;
+            color: #555;
+        }
+
+        /* Quiz Section */
+        .quiz-section {
+            margin-top: 30px;
+            background: #F1F8E9;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            border: 1px solid #C8E6C9;
+        }
+
+        .quiz-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border: 1px solid var(--primary-green);
+            background: white;
+            color: var(--primary-green);
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .quiz-btn:hover {
+            background: #f1f1f1;
+        }
+
+        .quiz-btn.correct {
+            background: var(--primary-green);
+            color: white;
+        }
+
+        .quiz-btn.wrong {
+            background: #e53935;
+            color: white;
+            border-color: #e53935;
+        }
+
+        /* COPY STYLE NAVBAR DARI HOME (Floating Button) */
+        .nav-floating-btn {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 65px;
+            height: 65px;
+            background: var(--gold);
+            border-radius: 50%;
+            border: 5px solid #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--dark-text);
+            font-size: 24px;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .nav-item span {
+            font-size: 10px;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- === VIEW 1: DAFTAR ARTIKEL === -->
+        <div id="listView" style="height: 100%; display: flex; flex-direction: column;">
+            <!-- Header -->
+            <div class="page-header">
+                <a href="home.html" style="color: #333; text-decoration: none;"><i class="fas fa-arrow-left"></i></a>
+                <h2>Pusat Ilmu</h2>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs-container">
+                <button class="tab-btn active" onclick="filterTab('all', this)">Semua</button>
+                <button class="tab-btn" onclick="filterTab('teori', this)">Teori Dasar</button>
+                <button class="tab-btn" onclick="filterTab('fiqih', this)">Fiqih Lingkungan</button>
+                <button class="tab-btn" onclick="filterTab('tutorial', this)">Tutorial 4R</button>
+            </div>
+
+            <!-- List Artikel -->
+            <div class="article-list">
+
+                <!-- Item 1: Teori -->
+                <div class="news-card" data-cat="teori" onclick="openArticle(1)">
+                    <img src="https://img.freepik.com/free-vector/hand-drawn-environmental-protection-background_23-2148175940.jpg"
+                        class="news-thumb" alt="Khalifah">
+                    <div class="news-content">
+                        <span class="news-cat">Teori Dasar</span>
+                        <h3 class="news-title">Manusia sebagai Khalifah Penjaga Bumi</h3>
+                        <span class="news-meta"><i class="far fa-clock"></i> 5 Menit baca</span>
+                    </div>
+                </div>
+
+                <!-- Item 2: Fiqih -->
+                <div class="news-card" data-cat="fiqih" onclick="openArticle(2)">
+                    <img src="https://img.freepik.com/free-vector/water-pollution-concept_1284-12720.jpg"
+                        class="news-thumb" alt="Air">
+                    <div class="news-content">
+                        <span class="news-cat">Fiqih Lingkungan</span>
+                        <h3 class="news-title">Hukum Mengotori Air Sungai dalam Islam</h3>
+                        <span class="news-meta"><i class="far fa-clock"></i> 3 Menit baca</span>
+                    </div>
+                </div>
+
+                <!-- Item 3: Tutorial -->
+                <div class="news-card" data-cat="tutorial" onclick="openArticle(3)">
+                    <img src="https://img.freepik.com/free-photo/composting-soil-organic-waste_23-2148661114.jpg"
+                        class="news-thumb" alt="Kompos">
+                    <div class="news-content">
+                        <span class="news-cat">Tutorial 4R</span>
+                        <h3 class="news-title">Cara Mudah Membuat Kompos dari Sisa Makanan</h3>
+                        <span class="news-meta"><i class="far fa-clock"></i> 7 Menit baca</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Navigation -->
+            <nav class="bottom-nav">
+                <a href="home.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Beranda</span>
+                </a>
+                <a href="elearning.html" class="nav-item active">
+                    <i class="fas fa-book-quran"></i>
+                    <span>Elearning</span>
+                </a>
+                <!-- Placeholder for the floating button -->
+                <div class="nav-item-placeholder"></div>
+                <a href="missions.html" class="nav-item">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Misi</span>
+                </a>
+                <a href="profile.html" class="nav-item">
+                    <i class="fas fa-user"></i>
+                    <span>Profil</span>
+                </a>
+            </nav>
+            <!-- Floating AR Button -->
+            <div class="nav-floating-btn" onclick="window.location.href='ar.html'">
+                <i class="fas fa-camera"></i>
+            </div>
+        </div>
+
+        <!-- === VIEW 2: DETAIL ARTIKEL (Overlay Full Screen) === -->
+        <div id="articleView">
+            <!-- Header Sticky Detail -->
+            <div class="page-header" style="box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <i class="fas fa-arrow-left" onclick="closeArticle()"
+                    style="cursor:pointer; font-size:20px; color: var(--primary-green);"></i>
+                <span style="margin-left:15px; font-weight:600; font-size:14px;">Kembali ke Materi</span>
+            </div>
+
+            <!-- Konten Dinamis (Akan diisi JS) -->
+            <div id="dynamicContent">
+                <!-- Isi artikel akan masuk di sini -->
+            </div>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // --- DATA ARTIKEL ---
+        const articles = {
+            1: {
+                title: "Manusia sebagai Khalifah Penjaga Bumi",
+                img: "https://img.freepik.com/free-vector/hand-drawn-environmental-protection-background_23-2148175940.jpg",
+                content: `
+                    <p class="article-text">Sebagai manusia, kita diciptakan Allah SWT bukan hanya untuk beribadah ritual, tetapi juga sebagai <strong>Khalifah fil Ardh</strong> (pemimpin di bumi). Amanah ini mencakup tanggung jawab untuk melestarikan alam.</p>
+                    <p class="article-text">Banyak yang salah mengartikan bahwa alam diciptakan semata-mata untuk dieksploitasi. Padahal, Islam mengajarkan keseimbangan (Mizan). Kerusakan yang terjadi di darat dan laut adalah akibat ulah tangan manusia sendiri.</p>
+                    <div class="highlight-box">
+                        <div class="highlight-icon"><i class="fas fa-lightbulb"></i></div>
+                        <div class="highlight-content">
+                            <h4>Penting Diingat</h4>
+                            <p>Menjaga lingkungan adalah bagian dari menjaga amanah Allah. Setiap kerusakan yang kita buat akan dimintai pertanggungjawaban.</p>
+                        </div>
+                    </div>
+                    <p class="article-text">Mulai sekarang, mari ubah pola pikir kita. Membuang sampah pada tempatnya bukan karena takut didenda, tapi karena kita takut mengkhianati amanah sebagai Khalifah.</p>
+                `,
+                quiz: {
+                    q: "Apa peran utama manusia terhadap alam menurut konsep Ekoteologi?",
+                    a: ["A. Pengeksploitasi mutlak", "B. Khalifah (Penjaga/Pemimpin)", "C. Penonton kerusakan"],
+                    correct: 1
+                }
+            },
+            2: {
+                title: "Hukum Mengotori Air Sungai dalam Islam",
+                img: "https://img.freepik.com/free-vector/water-pollution-concept_1284-12720.jpg",
+                content: `
+                    <p class="article-text">Air adalah sumber kehidupan. Dalam sejarah Islam, Rasulullah SAW sangat melarang umatnya mencemari sumber air, bahkan melarang buang air kecil di air yang tergenang.</p>
+                    <p class="article-text">Bagaimana dengan membuang sampah plastik ke sungai? Para ulama kontemporer sepakat bahwa tindakan yang membawa <strong>mudharat (bahaya)</strong> bagi orang banyak hukumnya dilarang.</p>
+                    <div class="highlight-box" style="background-color: #FFEBEE; border-left-color: #D32F2F;">
+                        <div class="highlight-icon" style="color: #D32F2F;"><i class="fas fa-gavel"></i></div>
+                        <div class="highlight-content">
+                            <h4 style="color: #D32F2F;">Hukum Fiqih</h4>
+                            <p>Haram hukumnya membuang limbah/sampah ke sungai jika terbukti menyebabkan banjir atau penyakit bagi masyarakat luas (Saddu adz-dzari'ah).</p>
+                        </div>
+                    </div>
+                    <p class="article-text">Sungai bukan tempat sampah raksasa. Mari jaga kejernihan air sebagai wujud syukur kita atas nikmat Allah.</p>
+                `,
+                quiz: {
+                    q: "Apa hukum mencemari air yang membahayakan orang banyak?",
+                    a: ["A. Makruh", "B. Mubah", "C. Haram"],
+                    correct: 2
+                }
+            },
+            3: {
+                title: "Cara Mudah Membuat Kompos dari Sisa Makanan",
+                img: "https://img.freepik.com/free-photo/composting-soil-organic-waste_23-2148661114.jpg",
+                content: `
+                    <p class="article-text">Sisa nasi, kulit buah, dan sayuran jangan dibuang begitu saja! Sampah organik ini bisa "disulap" menjadi pupuk kompos yang menyuburkan tanaman.</p>
+                    <p class="article-text"><strong>Langkah 1:</strong> Siapkan wadah ember bekas cat. Lubangi bagian bawahnya untuk sirkulasi udara.</p>
+                    <p class="article-text"><strong>Langkah 2:</strong> Masukkan tanah sebagai dasar, lalu masukkan sampah organik. Tutup lagi dengan tanah/sekam.</p>
+                    <div class="highlight-box">
+                        <div class="highlight-icon"><i class="fas fa-leaf"></i></div>
+                        <div class="highlight-content">
+                            <h4>Tips 4R (Recycle)</h4>
+                            <p>Jangan masukkan sisa daging atau susu ke dalam kompos sederhana karena akan mengundang belatung dan bau busuk.</p>
+                        </div>
+                    </div>
+                    <p class="article-text">Tunggu selama 3-4 minggu. Aduk sesekali. Tanah akan berubah menjadi hitam gembur dan siap dipakai!</p>
+                `,
+                quiz: {
+                    q: "Apa yang TIDAK BOLEH dimasukkan ke kompos sederhana?",
+                    a: ["A. Kulit Pisang", "B. Daging & Susu", "C. Daun Kering"],
+                    correct: 1
+                }
+            }
+        };
+
+        // --- FUNGSI LOGIKA ---
+
+        function openArticle(id) {
+            const data = articles[id];
+            const container = document.getElementById('dynamicContent');
+
+            // Render
+            container.innerHTML = `
+                <img src="${data.img}" class="article-hero">
+                <div class="article-body">
+                    <h1 class="article-title-big">${data.title}</h1>
+                    ${data.content}
+                    
+                    <!-- KUIS -->
+                    <div class="quiz-section" id="quizBox">
+                        <h3><i class="fas fa-question-circle"></i> Kuis Kilat</h3>
+                        <p>${data.quiz.q}</p>
+                        <div id="quizOptions">
+                            ${data.quiz.a.map((opt, index) =>
+                `<button class="quiz-btn" onclick="checkAnswer(${id}, ${index}, this)">${opt}</button>`
+            ).join('')}
+                        </div>
+                        <p id="quizFeedback" style="margin-top:10px; font-weight:bold;"></p>
+                    </div>
+                </div>
+            `;
+
+            // Tampilkan View
+            const view = document.getElementById('articleView');
+            view.style.display = 'block';
+
+            // Sembunyikan navbar saat baca
+            document.getElementById('bottomNav').style.display = 'none';
+        }
+
+        function closeArticle() {
+            document.getElementById('articleView').style.display = 'none';
+            // Munculkan kembali navbar
+            document.getElementById('bottomNav').style.display = 'flex';
+        }
+
+        function checkAnswer(articleId, selectedIndex, btnElement) {
+            const correctIndex = articles[articleId].quiz.correct;
+            const feedback = document.getElementById('quizFeedback');
+            const allBtns = document.querySelectorAll('.quiz-btn');
+
+            allBtns.forEach(btn => btn.disabled = true);
+
+            if (selectedIndex === correctIndex) {
+                btnElement.classList.add('correct');
+                feedback.innerHTML = "<span style='color:green'>Benar! +5 Poin</span>";
+                feedback.style.display = 'block';
+            } else {
+                btnElement.classList.add('wrong');
+                feedback.innerHTML = "<span style='color:red'>Kurang tepat, yuk baca lagi!</span>";
+                feedback.style.display = 'block';
+            }
+        }
+
+        function filterTab(category, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const items = document.querySelectorAll('.news-card');
+            items.forEach(item => {
+                if (category === 'all' || item.getAttribute('data-cat') === category) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil Saya</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE PROFIL --- */
+
+        /* Wrapper Scroll */
+        .profile-scroll {
+            height: 100%;
+            overflow-y: auto;
+            padding-bottom: 80px;
+            scrollbar-width: none;
+        }
+
+        .profile-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* 1. PROFILE HEADER */
+        .profile-header {
+            background: linear-gradient(180deg, var(--primary-green) 0%, #1B5E20 100%);
+            padding: 40px 20px 50px 20px;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            text-align: center;
+            color: white;
+            position: relative;
+        }
+
+        .profile-avatar-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 15px auto;
+        }
+
+        .profile-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            object-fit: cover;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .edit-icon {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: var(--gold);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            border: 2px solid white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .profile-name {
+            font-family: 'Montserrat';
+            font-weight: 700;
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .profile-level {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 2. STATS GRID */
+        .stats-container {
+            padding: 0 20px;
+            margin-top: -30px;
+            /* Overlap ke header */
+            position: relative;
+            z-index: 5;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            background: white;
+            padding: 20px 10px;
+            border-radius: 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-item {
+            text-align: center;
+            border-right: 1px solid #eee;
+        }
+
+        .stat-item:last-child {
+            border-right: none;
+        }
+
+        .stat-val {
+            font-family: 'Montserrat';
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--primary-green);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: #777;
+            margin-top: 5px;
+            display: block;
+        }
+
+        .stat-icon {
+            font-size: 14px;
+            color: var(--gold);
+            margin-bottom: 5px;
+        }
+
+        /* 3. IMPACT GRAPHIC (Visualisasi Dampak) */
+        .impact-section {
+            padding: 25px 20px;
+        }
+
+        .impact-card {
+            background: linear-gradient(135deg, #66BB6A, #2E7D32);
+            border-radius: 20px;
+            padding: 20px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(46, 125, 50, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Dekorasi background */
+        .impact-card::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        .impact-text {
+            flex: 1;
+            position: relative;
+            z-index: 2;
+        }
+
+        .impact-text h4 {
+            font-family: 'Montserrat';
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+
+        .impact-text p {
+            font-size: 11px;
+            opacity: 0.9;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .impact-visual {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #C8E6C9;
+            margin-left: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* 4. MENU LIST */
+        .menu-list {
+            padding: 0 20px;
+        }
+
+        .menu-item {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .menu-item:active {
+            background: #f5f5f5;
+        }
+
+        .menu-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .menu-icon {
+            width: 30px;
+            text-align: center;
+            color: var(--primary-green);
+        }
+
+        .menu-arrow {
+            color: #ccc;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            color: #e53935 !important;
+        }
+
+        .logout-icon {
+            color: #e53935 !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <div class="profile-scroll">
+
+            <!-- 1. Header -->
+            <div class="profile-header">
+                <div class="profile-avatar-container">
+                    <img src="https://img.freepik.com/free-photo/portrait-young-asian-man-student-holding-books-smiling-camera_1258-97204.jpg"
+                        class="profile-avatar" alt="Profil">
+                    <div class="edit-icon" onclick="alert('Fitur Edit Foto')"><i class="fas fa-pencil-alt"></i></div>
+                </div>
+                <h2 class="profile-name">Santri Teladan</h2>
+                <div class="profile-level">
+                    <i class="fas fa-seedling"></i> Eco-Warrior
+                </div>
+            </div>
+
+            <!-- 2. Stats Grid -->
+            <div class="stats-container">
+                <div class="stats-grid">
+                    <!-- Scan -->
+                    <div class="stat-item">
+                        <i class="fas fa-camera stat-icon"></i>
+                        <span class="stat-val">50</span>
+                        <span class="stat-label">Objek Scan</span>
+                    </div>
+                    <!-- Poin -->
+                    <div class="stat-item">
+                        <i class="fas fa-star stat-icon"></i>
+                        <span class="stat-val">1.200</span>
+                        <span class="stat-label">Total Poin</span>
+                    </div>
+                    <!-- Berat -->
+                    <div class="stat-item">
+                        <i class="fas fa-weight-hanging stat-icon"></i>
+                        <span class="stat-val">5kg</span>
+                        <span class="stat-label">Terpilah</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Grafik Dampak -->
+            <div class="impact-section">
+                <div class="impact-card">
+                    <div class="impact-text">
+                        <h4>Dampak Nyata Kamu</h4>
+                        <p>Alhamdulillah! Usahamu memilah sampah setara dengan menanam <strong>2 Pohon Jati</strong>.
+                        </p>
+                    </div>
+                    <div class="impact-visual">
+                        <!-- Ikon 2 Pohon -->
+                        <i class="fas fa-tree"></i>
+                        <i class="fas fa-tree" style="font-size: 25px; margin-left: -10px;"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Menu Pengaturan -->
+            <div class="menu-list">
+                <div class="menu-item" onclick="alert('Edit Profil')">
+                    <div class="menu-left">
+                        <i class="fas fa-user-edit menu-icon"></i> Edit Profil
+                    </div>
+                    <i class="fas fa-chevron-right menu-arrow"></i>
+                </div>
+
+                <div class="menu-item" onclick="alert('Pengaturan Aplikasi')">
+                    <div class="menu-left">
+                        <i class="fas fa-cog menu-icon"></i> Pengaturan
+                    </div>
+                    <i class="fas fa-chevron-right menu-arrow"></i>
+                </div>
+
+                <div class="menu-item" onclick="alert('Tentang Kami')">
+                    <div class="menu-left">
+                        <i class="fas fa-info-circle menu-icon"></i> Tentang Ekoteologi
+                    </div>
+                    <i class="fas fa-chevron-right menu-arrow"></i>
+                </div>
+
+                <div class="menu-item" onclick="confirmLogout()">
+                    <div class="menu-left logout-btn">
+                        <i class="fas fa-sign-out-alt menu-icon logout-icon"></i> Keluar
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <a href="home.html" class="nav-item">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="elearning.html" class="nav-item">
+                <i class="fas fa-book-quran"></i>
+                <span>Elearning</span>
+            </a>
+            <!-- Placeholder for the floating button -->
+            <div class="nav-item-placeholder"></div>
+            <a href="missions.html" class="nav-item">
+                <i class="fas fa-bullseye"></i>
+                <span>Misi</span>
+            </a>
+            <a href="profile.html" class="nav-item active">
+                <i class="fas fa-user"></i>
+                <span>Profil</span>
+            </a>
+        </nav>
+        <!-- Floating AR Button -->
+        <div class="nav-floating-btn" onclick="window.location.href='ar.html'">
+            <i class="fas fa-camera"></i>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        function confirmLogout() {
+            if (confirm("Apakah Anda yakin ingin keluar dari akun?")) {
+                window.location.href = 'index.html'; // Balik ke Splash Screen
+            }
+        }
+    </script>
+</body>
+
+</html>

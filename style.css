@@ -1,0 +1,134 @@
+/* style.css */
+:root {
+    --primary-green: #2E7D32;
+    --light-green: #81C784;
+    --bg-green: #F1F8E9;
+    --gold: #FFC107;
+    --dark-text: #1B5E20;
+    --white: #ffffff;
+    --gray: #757575;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* Mobile Frame Simulation */
+.mobile-frame {
+    width: 375px;
+    height: 667px;
+    background-color: var(--bg-green);
+    border-radius: 30px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: 8px solid #333;
+}
+
+/* Shared Components */
+.btn {
+    padding: 12px 24px;
+    border-radius: 25px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--primary-green);
+    color: var(--white);
+}
+
+.btn-primary:hover {
+    background-color: #1b5e20;
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+    height: 60px;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 9;
+}
+
+/* Placeholder for the floating button to create space */
+.nav-item-placeholder {
+    width: 65px;
+    height: 100%;
+}
+
+/* Floating Action Button for AR Scan */
+.nav-floating-btn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 65px;
+    height: 65px;
+    background: var(--gold);
+    border-radius: 50%;
+    border: 4px solid #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--dark-text);
+    font-size: 28px;
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.nav-floating-btn:active {
+    transform: translateX(-50%) scale(0.95);
+}
+
+.nav-item {
+    text-decoration: none;
+    color: var(--gray);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-basis: 0;
+    flex-grow: 1;
+}
+
+.nav-item i {
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+
+.nav-item.active {
+    color: var(--primary-green);
+    font-weight: bold;
+}
+
+/* Header Style */
+.header-curved {
+    background-color: var(--primary-green);
+    padding: 30px 20px 50px;
+    border-bottom-left-radius: 30px;
+    border-bottom-right-radius: 30px;
+    color: white;
+}

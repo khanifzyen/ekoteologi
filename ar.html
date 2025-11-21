@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Scanner Ekoteologi</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Amiri&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- STYLE KAMERA & INTERFACE --- */
+
+        /* Simulasi Viewport Kamera */
+        .camera-viewport {
+            /* Gambar placeholder sampah botol di rumput */
+            background: url('https://images.unsplash.com/photo-1605600659908-0ef719419d41?q=80&w=400&auto=format&fit=crop') no-repeat center center;
+            background-size: cover;
+            height: 100%;
+            width: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+
+        /* Header Transparan di atas kamera */
+        .camera-header {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .btn-back {
+            color: white;
+            font-size: 24px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            text-decoration: none;
+        }
+
+        /* Frame Target (Garis Putus-putus) */
+        .scan-frame-container {
+            margin-top: 120px;
+            /* Posisi vertikal */
+            position: relative;
+            width: 260px;
+            height: 260px;
+        }
+
+        .scan-frame {
+            width: 100%;
+            height: 100%;
+            border: 2px dashed rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.5);
+            /* Dark overlay di luar kotak */
+            position: relative;
+        }
+
+        /* Sudut-sudut frame biar terlihat canggih */
+        .scan-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--gold);
+            border-style: solid;
+        }
+
+        .tl {
+            top: -2px;
+            left: -2px;
+            border-width: 3px 0 0 3px;
+            border-radius: 10px 0 0 0;
+        }
+
+        .tr {
+            top: -2px;
+            right: -2px;
+            border-width: 3px 3px 0 0;
+            border-radius: 0 10px 0 0;
+        }
+
+        .bl {
+            bottom: -2px;
+            left: -2px;
+            border-width: 0 0 3px 3px;
+            border-radius: 0 0 0 10px;
+        }
+
+        .br {
+            bottom: -2px;
+            right: -2px;
+            border-width: 0 3px 3px 0;
+            border-radius: 0 0 10px 0;
+        }
+
+        .scan-text {
+            margin-top: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Tombol Shutter */
+        .shutter-area {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .shutter-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 4px solid white;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .shutter-btn:active {
+            transform: scale(0.9);
+        }
+
+        .shutter-inner {
+            width: 55px;
+            height: 55px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* --- STYLE BOTTOM SHEET (POPUP HASIL) --- */
+        .bottom-sheet {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #fff;
+            border-top-left-radius: 25px;
+            border-top-right-radius: 25px;
+            padding: 10px 20px 30px 20px;
+            transform: translateY(110%);
+            /* Hidden by default */
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 20;
+            box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.2);
+            max-height: 85%;
+            overflow-y: auto;
+        }
+
+        .bottom-sheet.active {
+            transform: translateY(0);
+        }
+
+        .drag-handle {
+            width: 40px;
+            height: 5px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            margin: 0 auto 15px auto;
+        }
+
+        /* Header Card */
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .result-title h2 {
+            font-family: 'Montserrat';
+            font-size: 20px;
+            color: #333;
+            margin: 0;
+        }
+
+        .result-title p {
+            font-size: 12px;
+            color: #777;
+            margin: 5px 0 0 0;
+        }
+
+        .tags-container {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .tag {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .tag-orange {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+
+        .tag-green {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+
+        /* Bagian 1: Visual Timeline */
+        .timeline-section {
+            background: #FAFAFA;
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #eee;
+        }
+
+        .section-label {
+            font-size: 12px;
+            color: #999;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .visual-timeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            margin-top: 10px;
+        }
+
+        /* Garis Timeline */
+        .visual-timeline::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, var(--primary-green), #ccc);
+            z-index: 0;
+        }
+
+        .time-point {
+            position: relative;
+            z-index: 1;
+            background: #FAFAFA;
+            padding: 0 5px;
+            text-align: center;
+        }
+
+        .time-point span {
+            font-size: 11px;
+            color: #555;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .time-point i {
+            font-size: 18px;
+        }
+
+        /* Animasi Botol Hancur */
+        .fading-bottle {
+            color: #777;
+            opacity: 0.3;
+            filter: blur(1px);
+            /* Animasi 'Shake' sedikit seolah hancur */
+        }
+
+        /* Bagian 2: Perspektif Islam */
+        .islamic-section {
+            background: #F0F7F1;
+            /* Green tint very light */
+            padding: 15px;
+            border-radius: 15px;
+            border-left: 4px solid var(--primary-green);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .arabic-text {
+            font-family: 'Amiri', serif;
+            /* Font Arabic */
+            font-size: 18px;
+            color: var(--primary-green);
+            line-height: 1.6;
+            text-align: right;
+            margin-bottom: 8px;
+        }
+
+        .translation-text {
+            font-size: 12px;
+            color: #555;
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        .audio-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-green);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Bagian 3: Action Buttons */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary-green);
+            color: var(--primary-green);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mobile-frame">
+
+        <!-- 1. VIEW KAMERA -->
+        <div class="camera-viewport">
+            <!-- Header -->
+            <div class="camera-header">
+                <a href="home.html" class="btn-back"><i class="fas fa-times"></i></a>
+                <div style="color:white; font-weight:bold; text-shadow: 0 1px 3px black;">AR Mode</div>
+                <div style="width:24px;"></div> <!-- Spacer -->
+            </div>
+
+            <!-- Target Frame -->
+            <div class="scan-frame-container">
+                <div class="scan-frame">
+                    <!-- Sudut Dekoratif -->
+                    <div class="scan-corner tl"></div>
+                    <div class="scan-corner tr"></div>
+                    <div class="scan-corner bl"></div>
+                    <div class="scan-corner br"></div>
+                </div>
+            </div>
+
+            <div class="scan-text" id="scanStatus">Arahkan kamera ke objek</div>
+
+            <!-- Shutter Button -->
+            <div class="shutter-area">
+                <div class="shutter-btn" onclick="startScanning()">
+                    <div class="shutter-inner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. BOTTOM SHEET (RESULT CARD) -->
+        <div class="bottom-sheet" id="resultSheet">
+            <div class="drag-handle"></div>
+
+            <!-- Header Card -->
+            <div class="result-header">
+                <div class="result-title">
+                    <h2>Botol Plastik (PET)</h2>
+                    <div class="tags-container">
+                        <span class="tag tag-orange">ANORGANIK</span>
+                        <span class="tag tag-green">BERNILAI EKONOMI</span>
+                    </div>
+                </div>
+                <div
+                    style="background: #E8F5E9; width: 40px; height: 40px; border-radius: 50%; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-recycle" style="color: var(--primary-green); font-size: 20px;"></i>
+                </div>
+            </div>
+
+            <!-- Bagian 1: Fakta Sains (Timeline) -->
+            <div class="timeline-section">
+                <span class="section-label">LAMA PENGURAIAN</span>
+                <div class="visual-timeline">
+                    <div class="time-point">
+                        <i class="fas fa-wine-bottle" style="color: var(--primary-green);"></i>
+                        <span style="font-weight:bold; color:var(--dark-text);">Hari Ini</span>
+                    </div>
+                    <div class="time-point">
+                        <!-- Ikon pudar -->
+                        <i class="fas fa-wine-bottle fading-bottle"></i>
+                        <span style="font-weight:bold; color:#d32f2f;">450 Tahun</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bagian 2: Perspektif Islam -->
+            <div class="islamic-section">
+                <button class="audio-btn" onclick="toggleAudio(this)">
+                    <i class="fas fa-play"></i>
+                </button>
+                <div class="arabic-text">
+                    وَلَا تُفْسِدُوا فِي الْأَرْضِ بَعْدَ إِصْلَاحِهَا
+                </div>
+                <div class="translation-text">
+                    "Dan janganlah kamu berbuat kerusakan di muka bumi, sesudah (Allah) memperbaikinya..." <br>
+                    <strong>(QS. Al-A'raf: 56)</strong>
+                </div>
+            </div>
+
+            <!-- Bagian 3: Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="claimReward()">
+                    <i class="fas fa-check-circle"></i> Saya Sudah Pilah (+10 Poin)
+                </button>
+                <button class="btn btn-outline"
+                    onclick="alert('Halaman Tutorial DIY (Kerajinan dari Botol) akan dibuka.')">
+                    <i class="fas fa-tools"></i> Cara Mengolah?
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation (Hidden on this page) -->
+        <nav class="bottom-nav" style="display: none;">
+            <a href="home.html" class="nav-item">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="elearning.html" class="nav-item">
+                <i class="fas fa-book-quran"></i>
+                <span>Elearning</span>
+            </a>
+            <div class="nav-item-placeholder"></div>
+            <a href="missions.html" class="nav-item">
+                <i class="fas fa-bullseye"></i>
+                <span>Misi</span>
+            </a>
+            <a href="profile.html" class="nav-item">
+                <i class="fas fa-user"></i>
+                <span>Profil</span>
+            </a>
+        </nav>
+        <div class="nav-floating-btn" onclick="window.location.href='ar.html'" style="display: none;">
+            <i class="fas fa-camera"></i>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // Logika Halaman AR
+
+        function startScanning() {
+            const statusText = document.getElementById('scanStatus');
+            const shutter = document.querySelector('.shutter-btn');
+
+            // Efek Visual Scanning
+            statusText.innerText = "Menganalisis objek...";
+            shutter.style.transform = "scale(0.8)";
+
+            // Simulasi Delay AI (1.5 detik)
+            setTimeout(() => {
+                shutter.style.transform = "scale(1)";
+                statusText.innerText = "Objek Terdeteksi!";
+                statusText.style.background = "#4CAF50"; // Jadi hijau
+
+                // Munculkan Bottom Sheet
+                document.getElementById('resultSheet').classList.add('active');
+            }, 1500);
+        }
+
+        // Fitur Audio
+        let isPlaying = false;
+        function toggleAudio(btn) {
+            const icon = btn.querySelector('i');
+            if (!isPlaying) {
+                // Simulasi Play
+                icon.classList.remove('fa-play');
+                icon.classList.add('fa-pause');
+                isPlaying = true;
+                // (Nanti di sini kode Audio() asli)
+            } else {
+                // Simulasi Pause
+                icon.classList.remove('fa-pause');
+                icon.classList.add('fa-play');
+                isPlaying = false;
+            }
+        }
+
+        function claimReward() {
+            if (confirm("Apakah sampah ini sudah Anda masukkan ke tong sampah Anorganik?")) {
+                alert("Alhamdulillah! Poin bertambah.");
+                window.location.href = 'home.html';
+            }
+        }
+    </script>
+</body>
+
+</html>
