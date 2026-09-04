@@ -1,0 +1,156 @@
+/* ============================================================
+   EKOTEOLOGI AR — Design Tokens (Fase D0)
+   Sumber kebenaran: docs/DESIGN.md
+   Konsumsi: mobile & admin (disalin ke src/styles/ saat dev).
+   Light mode only (MVP). Semua komponen WAJIB memakai token ini.
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ── 1. PRIMITIVE — Palet inti ─────────────────────────── */
+  --primary-green:        #2E7D32;  /* 5.13:1 di putih (teks OK) */
+  --primary-green-strong: #1B5E20;  /* 7.87:1 di putih */
+  --primary-green-deep:   #0F4D14;  /* 10.04:1 di putih — heading/fokus kuat */
+  --primary-green-soft:   #E8F5E9;  /* surface hijau lembut */
+  --light-green:          #81C784;  /* dekoratif/ilustrasi SAJA — bukan teks */
+  --bg-green:             #F1F8E9;  /* background layar mobile */
+
+  --gold:       #FFC107;  /* fill FAB / di atas hijau gelap (4.83:1). JANGAN utk teks di latar terang */
+  --gold-light: #FFD54F;  /* teks/ikon di atas hijau gelap (5.58:1) */
+  --gold-dark:  #FBC02D;  /* variasi gradient FAB/progress */
+  --gold-text:  #8A5A00;  /* teks bernuansa gold di latar putih/terang (5.93:1) */
+
+  --danger:      #D32F2F;  /* 4.98:1 di putih */
+  --danger-dark: #B71C1C;  /* 6.57:1 di putih; 5.74:1 di --danger-soft */
+  --danger-soft: #FDECEA;
+
+  /* ── 2. PRIMITIVE — Netral (ink + line + surface) ──────── */
+  --ink-900: #212121;  /* heading/teks utama — 16.10:1 di putih */
+  --ink-600: #666666;  /* teks sekunder — 5.74:1 di putih, 5.29:1 di bg-green */
+  --ink-400: #9E9E9E;  /* placeholder/disabled SAJA — 2.68:1 */
+  --ink-300: #BDBDBD;  /* ikon dekoratif */
+
+  --line:        #E0E0E0;  /* border halus dekoratif */
+  --line-strong: #C8C8C8;  /* border input default */
+  --surface:     #FFFFFF;
+  --surface-alt: #FAFAFA;   /* section dalam kartu */
+
+  /* ── 3. SEMANTIC ───────────────────────────────────────── */
+  --color-bg:             var(--bg-green);
+  --color-bg-admin:        #F6F8F5;  /* netral-hijau lembut utk admin */
+  --color-surface:        var(--surface);
+  --color-border:         var(--line);
+  --color-border-strong:  var(--line-strong);
+
+  --color-text:           var(--ink-900);
+  --color-heading:        var(--primary-green-strong);
+  --color-text-muted:     var(--ink-600);
+
+  --color-primary:        var(--primary-green);
+  --color-primary-strong: var(--primary-green-strong);
+  --color-primary-soft:   var(--primary-green-soft);
+  --color-primary-fg:     #FFFFFF;
+  --color-on-dark:        #FFFFFF;
+
+  --color-accent:        var(--gold);
+  --color-accent-light:  var(--gold-light);
+  --color-accent-fg:    var(--primary-green-strong); /* ikon/teks di atas gold */
+  --color-accent-text:  var(--gold-text);            /* teks gold-ish di terang */
+
+  --color-success:      var(--primary-green-strong);
+  --color-success-fg:   #FFFFFF;
+  --color-success-soft: var(--primary-green-soft);
+
+  --color-danger:        var(--danger);
+  --color-danger-strong: var(--danger-dark);
+  --color-danger-fg:     #FFFFFF;
+  --color-danger-soft:   var(--danger-soft);
+
+  --color-info:      #0277BD;  /* 4.80:1 di putih */
+  --color-info-soft: #E3F2FD;
+
+  --color-focus: var(--primary-green-strong);
+  --color-scrim: rgba(15, 25, 15, 0.55);
+
+  --color-header-grad: linear-gradient(180deg, var(--primary-green) 0%, var(--primary-green-strong) 100%);
+
+  /* ── 4. KATEGORI SAMPAH (scan & misi) ──────────────────── */
+  --cat-organik:   #1B5E20;  --cat-organik-soft:   #E8F5E9;  /* 7.00:1 */
+  --cat-plastik:   #0277BD;  --cat-plastik-soft:   #E3F2FD;  /* ≥3:1 utk teks besar semibold */
+  --cat-b3:        #B71C1C;  --cat-b3-soft:        #FDECEA;  /* 5.74:1 */
+  --cat-residu:    #5D4037;  --cat-residu-soft:    #EFEBE9;  /* 7.87:1 */
+
+  /* ── 5. SPASI (skala 4px) ──────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ── 6. RADIUS ─────────────────────────────────────────── */
+  --radius-sm:     8px;    /* input, chip kecil */
+  --radius-md:     16px;   /* tombol, kartu kecil */
+  --radius-lg:     24px;   /* kartu, sheet */
+  --radius-header: 32px;   /* header melengkung — signature */
+  --radius-pill:   999px;
+
+  /* ── 7. ELEVATION (shadow hijau lembut) ────────────────── */
+  --shadow-1:     0 2px 8px rgba(27, 94, 32, 0.08);
+  --shadow-2:     0 10px 20px rgba(46, 125, 50, 0.20);
+  --shadow-fab:   0 -4px 15px rgba(0, 0, 0, 0.15);
+  --shadow-sheet: 0 -5px 25px rgba(0, 0, 0, 0.20);
+
+  /* ── 8. MOTION ─────────────────────────────────────────── */
+  --dur-fast:   150ms;  /* hover, press, toggle */
+  --dur-base:   250ms;  /* sheet, panel, tab */
+  --dur-slow:   400ms;  /* transisi layar penuh (satu-satunya >350ms) */
+  --ease-out:   cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275); /* khusus sheet AR */
+
+  /* ── 9. TIPOGRAFI ──────────────────────────────────────── */
+  --font-heading: 'Montserrat', system-ui, -apple-system, sans-serif;
+  --font-body:    'Open Sans', system-ui, -apple-system, sans-serif;
+  --font-arabic:  'Amiri', 'Georgia', serif; /* teks Arab kutipan (opsional) */
+
+  --text-xs:  12px;
+  --text-sm:  14px;
+  --text-md:  16px;
+  --text-lg:  20px;
+  --text-xl:  24px;
+  --text-2xl: 28px;
+
+  --lh-tight:  1.25;  /* heading */
+  --lh-snug:   1.35;  /* subjudul */
+  --lh-normal: 1.6;   /* body */
+
+  /* ── 10. LAYOUT ────────────────────────────────────────── */
+  --tap-target:   44px;   /* minimum elemen interaktif */
+  --nav-height:   60px;
+  --fab-size:     65px;
+  --container-m:  480px;  /* max-width mobile di desktop */
+  --container-a:  1280px; /* container admin */
+  --sidebar-w:    260px;
+}
+
+/* ── REDUCED MOTION (wajib dihormati semua layar) ────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── FOCUS VISIBLE (standar aksesibilitas) ──────────────── */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
