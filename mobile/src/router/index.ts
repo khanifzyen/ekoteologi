@@ -44,6 +44,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/misi',
+      name: 'misi',
+      component: () => import('@/views/MissionsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/profil',
       name: 'profil',
       component: () => import('@/views/ProfileView.vue'),

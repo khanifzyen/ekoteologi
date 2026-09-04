@@ -13,10 +13,10 @@ const toast = useToastStore()
 
 // Layar tujuan dibangun bertahap (implementation-plan Sprint 4–7).
 const items = [
-  { key: 'home', label: 'Beranda', icon: 'fa-house', sprint: null },
-  { key: 'misi', label: 'Misi', icon: 'fa-bullseye', sprint: 'Sprint 4' },
-  { key: 'belajar', label: 'Belajar', icon: 'fa-book-open', sprint: 'Sprint 7' },
-  { key: 'profil', label: 'Profil', icon: 'fa-user', sprint: null },
+  { key: 'home', label: 'Beranda', icon: 'fa-house', to: 'home', sprint: null },
+  { key: 'misi', label: 'Misi', icon: 'fa-bullseye', to: 'misi', sprint: null },
+  { key: 'belajar', label: 'Belajar', icon: 'fa-book-open', to: null, sprint: 'Sprint 7' },
+  { key: 'profil', label: 'Profil', icon: 'fa-user', to: 'profil', sprint: null },
 ] as const
 
 // FAB kamera → layar scan (Sprint 3 — fitur signature).
@@ -25,7 +25,12 @@ function onFab() {
 }
 
 function onItem(item: (typeof items)[number]) {
-  if (item.key !== props.active) toast.show(`Layar ${item.label} menyusul di ${item.sprint ?? 'sprint berikutnya'}.`)
+  if (item.key === props.active) return
+  if (item.to) {
+    void router.push({ name: item.to })
+    return
+  }
+  toast.show(`Layar ${item.label} menyusul di ${item.sprint ?? 'sprint berikutnya'}.`)
 }
 </script>
 

@@ -62,6 +62,17 @@ class Settings(BaseSettings):
     scan_cache_ttl_hours: int = 24  # cache Redis per hash foto (PRD §5.10 #6)
     scan_cache_schema: str = "v1"  # naikkan utk menggusur cache lama saat prompt berubah
 
+    # ── Misi (Sprint 4) ──
+    # Batas ukuran foto bukti misi (klaim photo).
+    mission_image_max_mb: int = 5
+
+    # ── Biaya LLM (dashboard admin, Sprint 4 — plan §5.3) ──
+    # Estimasi biaya per 1.000 token (satuan mata uang lokal, mis. IDR) dan
+    # budget bulanan (0 = belum ditetapkan → kartu menampilkan tanpa budget).
+    # Mock mode tidak memakai token → biaya Rp0 apa pun nilainya.
+    llm_cost_per_1k_tokens: float = 0.0
+    llm_budget_monthly: float = 0.0
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

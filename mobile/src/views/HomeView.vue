@@ -134,14 +134,14 @@ onMounted(async () => {
       <button
         class="menu-card"
         type="button"
-        @click="toast.show('Layar Misi menyusul di Sprint 4.')"
+        @click="router.push({ name: 'misi' })"
       >
         <i
           class="fas fa-bullseye"
           aria-hidden="true"
         />
         <strong>Misi</strong>
-        <span>Segera hadir</span>
+        <span>Klaim poin kebaikan</span>
       </button>
       <button
         class="menu-card"

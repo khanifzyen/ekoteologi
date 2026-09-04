@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [vue()],
@@ -12,5 +12,11 @@ export default defineConfig({
   },
   server: {
     port: 5174,
+  },
+  test: {
+    environment: 'happy-dom',
+    include: ['src/**/*.spec.ts'],
+    // vue-tsc --noEmit typecheck tidak perlu memproses file test
+    typecheck: { enabled: false },
   },
 })

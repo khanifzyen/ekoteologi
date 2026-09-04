@@ -77,8 +77,18 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/scans` | Bearer | Riwayat scan milik user, terbaru dulu. Query: `category_id?`, `limit` (1–50, default 20), `offset` → `{items, total, limit, offset}` |
 | GET | `/v1/scans/categories` | — | Daftar kategori sampah (seed) utk filter chips — `{id, name, icon, base_points}` |
 | GET | `/v1/scans/quota` | Bearer | Pemakaian kuota hari ini tanpa mengkonsumsi slot → `{used, limit, remaining, resets_in_seconds}`. Redis mati → 503 (UI menyembunyikan pill kuota) |
-| GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users:{total,new_7d}, scans:{today,total}, verification:{pending}, cache:{hit,miss,hit_rate}}` (grafik & biaya LLM menyusul Sprint 4) |
-| GET | `/uploads/*` | — | File statis (avatar, foto scan) |
+| GET | `/v1/missions` | Bearer | Daftar misi aktif dalam jendela periode + klaim saya periode berjalan (`my_claim`) + ringkasan mingguan (`{week_done, week_total, week_points}`) |
+| POST | `/v1/missions/{id}/claim` | Bearer | Klaim misi **photo**: multipart `file` bukti (JPG/PNG/WebP, ≤`MISSION_IMAGE_MAX_MB`) + `consent=true` (wajib — PRD §9, tercatat di `user_missions.consent_at`) → status `pending` (antrian verifikasi). 409 misi nonaktif/di luar periode/sudah diklaim periode ini; 400 mode non-photo (menyusul Sprint 5)/tanpa consent/format salah; 413 ukuran. Bukti yang **ditolak** boleh diganti (baris sama di-reset). Poin baru diberikan saat approve (Sprint 5) |
+| GET | `/v1/badges` | Bearer | Lencana + flag `earned`/`earned_at` milik user (tab Pencapaian; pemberian otomatis = badge engine Sprint 6) |
+| GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users, scans, verification:{pending}, cache:{hit,miss,hit_rate}, llm:{cost_month, tokens_month, budget_monthly}}` — biaya LLM = token bulan berjalan (scan non-cache) × `LLM_COST_PER_1K_TOKENS` |
+| GET | `/v1/admin/charts` | Bearer panel | Data 2 chart dashboard: `daily` (scan/hari `days`=7–30, default 14, hari kosong = 0) & `categories` (7 hari, terbanyak dulu, persentase) |
+| GET | `/v1/admin/missions` | Bearer panel | Daftar misi + rekap klaim (`claims_total`, `claims_pending`). Query: `is_active?`, `verification?`, `q?` (judul), `limit` (1–100), `offset` |
+| POST | `/v1/admin/missions` | Bearer admin·editor | Buat misi `{title, description?, type: daily\|weekly\|special, icon?, points, verification: photo\|auto_scan\|manual, scan_category_id? (wajib utk auto_scan), required_count?, start_at?, end_at?, is_active?}` → 201. Validasi: `start_at < end_at`, kategori harus ada |
+| PATCH | `/v1/admin/missions/{id}` | Bearer admin·editor | Ubah sebagian field misi (termasuk `is_active` utk nonaktifkan) |
+| DELETE | `/v1/admin/missions/{id}` | Bearer admin | Hapus misi; 409 bila sudah punya klaim (nonaktifkan saja — jaga riwayat) |
+| GET | `/v1/admin/claims` | Bearer panel | Antrian klaim (`user_missions` + user + misi, terbaru dulu). Query: `status?`, `mission_id?`, `limit`, `offset`. Read-only — aksi approve/reject = modul Verifikasi (Sprint 5) |
+| GET | `/v1/admin/users` | Bearer panel | Daftar pengguna (+level dihitung dari `levels`). Query: `q?` (nama/email/kota), `role?`, `status?` (active\|blocked), `limit`, `offset` |
+| GET | `/uploads/*` | — | File statis (avatar, foto scan, bukti misi) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
 
@@ -154,6 +164,25 @@ nol di dev karena default `mock`.
 - Angka penghitung cache (`scan:stats:*`) diekspos ke admin lewat
   `GET /v1/admin/kpi` (`cache.hit_rate`) sebagai dasar metrik hit rate ≥70%.
 
+### Misi: klaim & data (Sprint 4)
+
+- **Periode anti dobel**: `UNIQUE(user_id, mission_id, period_date)` (skema awal)
+  + `period_date` dihitung server (`services/missions.period_date_for`):
+  `daily`/`special` → hari ini; `weekly` → Senin pekan berjalan. `period_date`
+  tidak pernah NULL (NULL lolos UNIQUE di Postgres).
+- **Consent foto bukti (keputusan §2.1 #6)**: klaim photo menuntut `consent=true`;
+  waktu persetujuan dicatat server-side di `user_missions.consent_at` (bukan hanya
+  localStorage perangkat). Foto bukti disimpan `UPLOAD_DIR/missions/` (dilayani
+  `/uploads`), hanya ditampilkan ke verifier/admin (layar verifikasi Sprint 5);
+  penggantian bukti setelah penolakan menghapus berkas lama dari disk. Retensi:
+  bukti hidup selama baris klaim ada; penghapusan atas permintaan lewat support
+  (proses manual MVP) — kebijakan TTL otomatis ditinjau Sprint 8 dgn keputusan PO.
+- **Poin misi tidak diberikan saat klaim** — ledger hanya disentuh saat approval
+  (Sprint 5), sehingga antrian `pending` tidak mengubah `users.points`.
+- **Biaya LLM**: dashboard menjumlahkan `llm_meta.tokens.total_tokens` baris
+  scan non-cache bulan berjalan (baris cache menyalin meta panggilan asli —
+  agar tidak dihitung ganda) × `LLM_COST_PER_1K_TOKENS`; mock mode = Rp0.
+
 ## Middleware audit log
 
 - Mencatat POST/PUT/PATCH/DELETE (kecuali `/health` dan seluruh `/v1/auth/*` —
@@ -166,7 +195,9 @@ nol di dev karena default `mock`.
 `uv run python -m scripts.seed` (idempoten): 7 `waste_categories`
 (Organik, Plastik, Kertas, Kaca, Logam, B3, Residu — dgn icon & `base_points`),
 10 `levels` (0 → 2.300 poin: Pemula s.d. Teladan Ekoteologi), 10 `badges`
-(kriteria JSONB `{"type","value"}` — dievaluasi badge engine Sprint 6).
+(kriteria JSONB `{"type","value"}` — dievaluasi badge engine Sprint 6), dan
+5 `missions` contoh (photo ×2, manual ×2, auto_scan ×1 — Sprint 4; admin bisa
+mengelola lewat CRUD `/v1/admin/missions`).
 
 ## Test
 

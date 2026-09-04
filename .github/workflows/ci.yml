@@ -60,7 +60,7 @@ jobs:
         run: uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 
   admin:
-    name: Admin — lint & build
+    name: Admin — lint, test & build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -74,6 +74,7 @@ jobs:
           cache-dependency-path: admin/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run test
       - run: npm run build
 
   mobile:

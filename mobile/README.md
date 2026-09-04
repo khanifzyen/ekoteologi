@@ -92,6 +92,28 @@ Sheet error memetakan 429 (kuota harian + reset dari header `Retry-After`),
   (`GET /v1/scans/categories`), dikelompokkan Hari ini/Kemarin/tanggal,
   pagination "Muat lagi", state skeleton/empty/error lengkap.
 
+## Misi (Sprint 4)
+
+`/misi` (`MissionsView`, mockup `misi.html`): header melengkung dgn panel
+**Progres misi minggu ini** (`{week_done}/{week_total} · +week_points poin`,
+progressbar ber-ARIA) + chip "N misi baru", dan dua tab:
+
+- **Harian** — kartu misi (`MissionCard`) dengan 4 keadaan: bisa diklaim
+  (tombol Unggah Bukti/Klaim Poin + catatan consent), auto_scan (progres bar
+  "2 dari 3 · otomatis dari scan" — diisi Sprint 5), menunggu verifikasi
+  (aksen info), selesai (aksen hijau), ditolak (catatan admin + Unggah Ulang).
+- **Pencapaian** — grid lencana (`GET /v1/badges`): diraih vs terkunci;
+  pemberian otomatis menyusul badge engine Sprint 6 (data tampil jujur).
+
+Alur klaim photo: tombol Unggah Bukti → **consent foto** (kartu reusable
+`ConsentCard`, PRD §9) → pilih Kamera (`input capture=environment`) atau Galeri
+(tanpa plugin native) → pratinjau → Kirim Bukti → `POST /v1/missions/{id}/claim`
+(klaim masuk antrian `pending`, consent tercatat server). Klaim manual &
+auto_scan menyusul Sprint 5 — tombolnya memberi pesan jelas. Error klaim
+dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
+0 luring — foto tetap tersimpan utk kirim ulang). Poin baru masuk saat approve
+(Sprint 5), bukan saat klaim.
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.
@@ -102,17 +124,20 @@ Sheet error memetakan 429 (kuota harian + reset dari header `Retry-After`),
 - Komponen state `src/components/state/` (Sprint 1): StateSkeleton, StateEmpty, StateError,
   OfflineBar (bar "luring" otomatis via event `online`/`offline`).
 - `src/components/scan/ConsentCard.vue` — kartu persetujuan foto (PRD §9),
-  reusable untuk unggah bukti misi (Sprint 4).
-- `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (FAB → `/scan`).
-- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat + level),
+  dipakai layar Scan dan alur unggah bukti misi (Sprint 4).
+- `src/components/missions/MissionCard.vue` — kartu misi 4 keadaan (teruji vitest).
+- `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (FAB → `/scan`,
+  Misi → `/misi` aktif sejak Sprint 4).
+- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat/misi + level),
   ScanView (signature, Sprint 3), HistoryView (riwayat + filter, Sprint 3),
-  ProfileView.
+  MissionsView (misi + lencana + klaim photo, Sprint 4), ProfileView.
 - `src/services/`: `camera.ts` (getUserMedia + capture JPEG + torch + galeri),
-  `scan.ts` (endpoint `/v1/scan*`). `src/utils/` — `scan.ts` (latensi, peta
-  error, kuota; teruji vitest), `datetime.ts`, `consent.ts`.
+  `scan.ts` (endpoint `/v1/scan*`), `missions.ts` (endpoint `/v1/missions*`,
+  `/v1/badges`). `src/utils/` — `scan.ts`, `missions.ts` (keadaan kartu, peta
+  error klaim, progres; teruji vitest), `datetime.ts`, `consent.ts`.
 - `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout
   + `applyPoints`).
 - Test: `npm test` (vitest + happy-dom) — unit helper `src/utils` + component
-  `ConsentCard`.
+  `ConsentCard`, `MissionCard`.
 - Font & ikon di-bundle lokal (fontsource + `@fortawesome/fontawesome-free@6`) agar app
   berjalan offline — tanpa CDN.

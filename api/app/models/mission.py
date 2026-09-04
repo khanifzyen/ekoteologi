@@ -56,6 +56,9 @@ class UserMission(Base):
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     review_note: Mapped[str | None] = mapped_column(Text)
     points_awarded: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Bukti consent foto (PRD §9 / keputusan §2.1 #6): tercatat server-side saat
+    # bukti photo diklaim — bukan hanya localStorage perangkat (Sprint 4).
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

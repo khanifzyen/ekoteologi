@@ -13,21 +13,36 @@ Panel admin (Vue 3 + Vite + TypeScript + Pinia + Vue Router). Acuan visual: `doc
 - Komponen inti: `BaseButton`, `BaseCard`, `BaseChip`, `BaseInput`, `BaseTabs`,
   `BaseSkeleton`, `ToastHost` (`src/components/ui/`) — semua memakai token.
 
-## Dashboard KPI (Sprint 3)
+## Dashboard KPI + Chart (Sprint 3–4)
 
-`DashboardView` kini menampilkan **KPI cards read-only** sesuai mockup
-`admin/index.html` (pola `.panel.kpi`), sumber data `GET /v1/admin/kpi`:
+`DashboardView` menampilkan mockup `admin/index.html` lengkap (read-only):
 
-| Kartu | Sumber data |
+| Kartu / Panel | Sumber data |
 |---|---|
-| Pengguna Terdaftar (+baru 7 hari) | `users` |
+| Pengguna Terdaftar (+baru 7 hari) | `GET /v1/admin/kpi` → `users` |
 | Total Scan Hari Ini (+total) | `scans` |
-| Antrian Verifikasi (menunggu review — terisi mulai Sprint 4) | `user_missions` status `pending` |
-| Cache LLM Hit Rate (hit/miss) | penghitung Redis `scan:stats:*` |
+| Antrian Verifikasi (bukti misi menunggu review) | `user_missions` status `pending` |
+| Biaya LLM (bulan berjalan, gaya "Rp84,5rb") | `llm` — token scan non-cache × `LLM_COST_PER_1K_TOKENS`; mock mode = Rp0 |
+| Chart garis: scan harian (14 hari, tick + anotasi puncak) | `GET /v1/admin/charts` → `daily` |
+| Chart batang: komposisi kategori (7 hari, %) | `charts` → `categories` |
 
-State lengkap: skeleton saat memuat, error + Coba Lagi, tombol Segarkan.
-Biaya LLM (mode mock = Rp0) dan grafik scan harian/kategori menyusul Sprint 4
-sesuai implementation-plan.
+Chart adalah SVG inline gaya editorial (gridline halus, 4 tick, aksen gold,
+animasi draw yang otomatis mati pada `prefers-reduced-motion` — port 1:1 dari
+mockup). Matematika skala/geometry diekstrak ke `utils/chart.ts` dan diuji vitest.
+Cache LLM hit rate tampil di kaki chart garis (hit/total + persen).
+
+## Modul Pengguna & Misi (Sprint 4)
+
+- **`UsersView` (`/pengguna`)** — tabel pengguna read-only sesuai mockup
+  `pengguna.html`: filter chips (Semua/User/Verifier/Editor/Admin/Nonaktif),
+  pencarian debounce (nama/email/kota), badge role & status, pagination
+  ("Menampilkan 1–20 dari N"), level dihitung server. Aksi kelola (blokir,
+  ubah role, reset poin) menyusul sesuai rencana sprint.
+- **`MissionsView` (`/misi`)** — CRUD misi: form panel (judul, deskripsi, tipe,
+  poin, mode verifikasi, target aksi, ikon, periode mulai/selesai, aktif) —
+  tulis: admin+editor, hapus: admin (ditolak bila sudah ada klaim → nonaktifkan).
+  Panel "Klaim Masuk" menampilkan antrian bukti (status `pending`, consent
+  tercatat) read-only — aksi setuju/tolak = modul Verifikasi (Sprint 5).
 
 ## Perintah
 
@@ -35,6 +50,7 @@ sesuai implementation-plan.
 npm ci
 npm run dev        # http://localhost:5174
 npm run lint       # eslint (flat config)
+npm run test       # vitest (util chart)
 npm run build      # vue-tsc (typecheck) + vite build
 ```
 
@@ -51,13 +67,14 @@ Salin `.env.example` → `.env`:
 ```
 src/
 ├── api/client.ts       # fetch wrapper + ApiError (pesan dari detail backend)
-├── components/         # KpiCard (Sprint 3) + komponen inti ui/ (Sprint 0)
+├── components/         # KpiCard, ChartLine, ChartBar (Sprint 3–4) + komponen inti ui/ (Sprint 0)
 ├── layouts/AdminShell  # sidebar + topbar + drawer (mockup index.html)
 ├── router/index.ts     # rute + role guard
 ├── stores/             # auth (sesi+role), toast
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
-└── views/              # LoginView, DashboardView (KPI cards read-only — Sprint 3)
+├── utils/chart.ts      # matematika chart (murni, teruji vitest)
+└── views/              # LoginView, DashboardView (KPI+chart), UsersView, MissionsView
 ```
 
-Catatan: modul menu lain (Pengguna, Verifikasi, Misi, dst.) sengaja nonaktif dengan toast
+Catatan: modul menu lain (Verifikasi, E-Learning, dst.) sengaja nonaktif dengan toast
 "menyusul" sesuai peta sprint; item Fase 2 diberi tanda *Segera* seperti mockup.

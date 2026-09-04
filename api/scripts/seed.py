@@ -1,4 +1,4 @@
-"""Seed data awal (Sprint 1): waste_categories, levels, badges.
+"""Seed data awal (Sprint 1 & 4): waste_categories, levels, badges, missions.
 
 Idempotent — aman dijalankan berulang; baris yang sudah ada (dicocokkan lewat
 kunci naturalnya) tidak diduplikasi. Jalankan: `uv run python -m scripts.seed`.
@@ -9,7 +9,7 @@ import asyncio
 from sqlalchemy import func, select
 
 from app.db.session import get_engine, get_session_factory
-from app.models import Badge, Level, WasteCategory
+from app.models import Badge, Level, Mission, WasteCategory
 
 CATEGORIES: list[dict] = [
     {"name": "Organik", "icon": "fa-apple-whole", "base_points": 5},
@@ -109,6 +109,54 @@ BADGES: list[dict] = [
     },
 ]
 
+# Misi contoh (Sprint 4) — dibuat admin lewat CRUD, seed hanya memberi contoh
+# awal agar alur mobile→antrian bisa didemokan tanpa isi data manual. Tanpa
+# jendela waktu (start/end None) → selalu aktif; periodisasi harian/mingguan
+# dihitung server (services.missions).
+MISSIONS: list[dict] = [
+    {
+        "title": "Scan 3 Jenis Sampah",
+        "description": "Gunakan scan AI untuk mengenali 3 jenis sampah berbeda hari ini.",
+        "type": "daily",
+        "icon": "fa-camera",
+        "points": 15,
+        "verification": "auto_scan",
+        "required_count": 3,
+    },
+    {
+        "title": "Setor 1 kg Plastik ke Bank Sampah",
+        "description": "Unggah foto bukti penyerahan sampahmu. Verifikasi admin maks. 1×24 jam.",
+        "type": "daily",
+        "icon": "fa-recycle",
+        "points": 50,
+        "verification": "photo",
+    },
+    {
+        "title": "Pilah Sampah Rumah Tangga",
+        "description": "Unggah foto hasil pilah organik & anorganik di rumahmu.",
+        "type": "daily",
+        "icon": "fa-trash-can",
+        "points": 20,
+        "verification": "photo",
+    },
+    {
+        "title": "Bersihkan Wudhu, Hemat Air",
+        "description": "Gunakan air secukupnya saat wudhu hari ini — cukup klaim jujur.",
+        "type": "daily",
+        "icon": "fa-hands-bubbles",
+        "points": 10,
+        "verification": "manual",
+    },
+    {
+        "title": 'Baca Refleksi "Bumi sebagai Amanah"',
+        "description": "Selesaikan refleksi harian di menu Belajar.",
+        "type": "daily",
+        "icon": "fa-mosque",
+        "points": 5,
+        "verification": "manual",
+    },
+]
+
 
 async def seed() -> dict[str, int]:
     """Isi tabel seed. Kembalikan jumlah baris per tabel setelah seeding."""
@@ -130,6 +178,13 @@ async def seed() -> dict[str, int]:
             if exists is None:
                 db.add(Badge(**badge))
 
+        for mission in MISSIONS:
+            exists = (
+                await db.scalars(select(Mission).where(Mission.title == mission["title"]))
+            ).first()
+            if exists is None:
+                db.add(Mission(**mission))
+
         await db.commit()
 
         return {
@@ -138,6 +193,7 @@ async def seed() -> dict[str, int]:
             ),
             "levels": await db.scalar(select(func.count()).select_from(Level)) or 0,
             "badges": await db.scalar(select(func.count()).select_from(Badge)) or 0,
+            "missions": await db.scalar(select(func.count()).select_from(Mission)) or 0,
         }
 
 
