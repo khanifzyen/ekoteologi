@@ -18,7 +18,7 @@ Bukti cepat:
 |---|---|
 | APK debug ter-build | ✅ `app-debug.apk` (5,4 MB, compileSdk 36, minSdk 24); CI juga memproduksinya sebagai artefak |
 | Admin login tampil sesuai shell mockup | ✅ Login → dashboard shell D3 (sidebar + topbar) terverifikasi di browser |
-| CI hijau | ✅ Lokal: ruff bersih, 15/15 test pytest, build admin & mobile sukses. Workflow CI menyusul verifikasi pertama di GitHub setelah push |
+| CI hijau | ✅ Run pertama di GitHub **sukses** (run #1, 8m58s): api 34s · admin 5m14s · mobile 5m17s · apk 3m35s — artefak `app-debug-apk` 5,04 MB |
 
 ---
 
@@ -141,8 +141,8 @@ karena `route.query` dibaca non-reaktif — kini `computed`.
 
 ## 6. DoD Sprint 0 — Checklist
 
-- [x] CI (lint + test + build) didefinisikan; lokal semua hijau — verifikasi run pertama di
-  GitHub terjadi setelah push commit ini.
+- [x] CI (lint + test + build) didefinisikan dan **hijau di GitHub** (run pertama #1 sukses,
+  semua 4 job) maupun lokal.
 - [x] Unit test logika Sprint 0 (auth, audit); coverage penuh diukur mulai Sprint 2 (scope
   logika bisnis poin/verifikasi/kuis belum ada).
 - [x] UI 100% dari `tokens.css` — nol hardcode warna/jarak pada komponen baru (nilai gaya
