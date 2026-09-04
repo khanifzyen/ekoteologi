@@ -53,7 +53,7 @@ Bukti cepat (kriteria demo Sprint 8):
 | QA cross-device Android | ⚠️ Pengganti terukur: smoke E2E **33 langkah lulus** (alur kritis §5.2 + Sprint 8), 276 pytest / 110 vitest, APK debug + AAB release BUILD SUCCESSFUL; device matrix 6 perangkat (360–480dp, Android 10–14, RAM 2GB) + checklist regresi 11 layar disiapkan di `docs/qa/DEVICE-MATRIX.md` — eksekusi fisik menunggu perangkat |
 | Hardening: rate limit global, security header, Sentry, analytics lengkap | ✅ Rate limit global 429+`Retry-After` & fail-open teruji; 6 security header pada semua respons (HSTS prod-only teruji); Sentry env-gated (tanpa DSN mati, 4xx disaring); metrik event PRD §8 lengkap & terbaca endpoint (smoke langkah 32) |
 | Rilis Play Store + release notes + deklarasi izin | ⚠️ Pengganti terukur: manifest berdeklarasi `CAMERA` + `POST_NOTIFICATIONS` + uses-feature non-wajib (justifikasi PRD §9); signing release env-driven (`bundleRelease` BUILD SUCCESSFUL — unsigned karena kunci belum ada); release notes v1.0.0 + checklist Play Store 6 tahap untuk PO (`docs/release/`) |
-| CI hijau | ⏳ Dipantau pasca-push — hasil dicatat pada commit `docs(sprint): catat hasil run CI sprint 8` (pola sprint 5–7) |
+| CI hijau | ✅ run #19 pada `4424b03` (commit fitur + laporan satu push) — 4/4 job hijau (api, admin, mobile, android-apk) — detail §4 |
 
 ---
 
@@ -162,7 +162,7 @@ Bukti cepat (kriteria demo Sprint 8):
 | Composer role & audit | test + smoke | ✅ verifier/editor → 403; judul pendek → 422; segmen asing → 400; audit `push.broadcast` dgn actor+rekap tercatat |
 | Broadcast semantics | test | ✅ 1 baris untuk semua; `unread_count` tidak menghitung broadcast; `unread_only` mengeluarkan broadcast; tandai-baca massal tidak menyentuhnya |
 | Audit statis UI vs AUDIT.md | grep kode | ✅ admin 0 warna hardcode; PushView 41 pemakaian `var(--…)`; 5 warna hardcode mobile = warisan sprint lalu yang terdokumentasi (4 warna brand Google resmi di SVG SSO `AuthView` Sprint 1 — AUDIT M2; 1 scrim `color-mix` misi Sprint 4); ikon FontAwesome 6 semua; tap target ≥44px (chip segmen min-height 44) |
-| CI GitHub | push commit fitur + laporan | ⏳ dipantau via REST API — hasil dicatat commit berikutnya |
+| CI GitHub | run #19 (`4424b03`, push commit fitur + laporan) | ✅ sukses — api (ruff + 276 pytest + coverage gate), admin (lint+vitest+build), mobile (lint+vitest+build), android-apk (4/4 job; API 3m41s, APK 2m11s) |
 
 ---
 
@@ -264,8 +264,9 @@ Bukti cepat (kriteria demo Sprint 8):
 
 ## 6. DoD Sprint 8 — Checklist
 
-- [x] CI hijau di GitHub: ⏳ dipantau pasca-push (commit `docs(sprint): catat
-      hasil run CI sprint 8` akan mengisi baris ini — pola sprint 5–7).
+- [x] CI hijau di GitHub: run #19 pada `4424b03` **success** (4/4 job) —
+      api (ruff + 276 pytest + coverage gate 70%), admin (lint + vitest +
+      build), mobile (lint + vitest + build), android-apk + artefak APK.
       Verifikasi lokal penuh: 276 pytest (coverage 77,67%, gate 70%), 81+29
       vitest, ruff/eslint bersih, build admin+mobile, APK debug 7,3 MB +
       AAB release 5,7 MB.
