@@ -41,10 +41,26 @@ class Settings(BaseSettings):
         "capacitor://localhost,http://localhost"
     )
 
-    # Prasyarat Sprint 2 (implementation-plan §2.2): model & key via env, tidak hardcode.
+    # ── LLM Scan (Sprint 2) — PRD §4/§5.3: semuanya via env, tidak ada yang hardcode. ──
+    # `llm_mode=mock` (default) → MockProvider, biaya nol saat development/test.
+    # `llm_mode=live` → provider OpenAI-compatible; wajib isi api_key/base_url/model,
+    # jika belum lengkap otomatis jatuh kembali ke mock (dengan warning log).
+    llm_mode: str = "mock"  # mock | live
     llm_api_key: str = ""
     llm_model: str = ""
-    llm_base_url: str = ""
+    llm_fallback_model: str = ""  # model kedua bila primer gagal setelah retry (PRD §4)
+    llm_base_url: str = ""  # mis. https://open.bigmodel.cn/api/paas/v4 (OpenAI-compatible)
+    llm_timeout_seconds: float = 30.0
+    llm_max_retries: int = 1  # percobaan ulang per model (di luar percobaan pertama)
+    llm_retry_backoff_seconds: float = 0.5  # jeda antar retry (0 utk test)
+
+    # ── Scan: batas & cache (Sprint 2) ──
+    # Kuota scan/user/hari (keputusan §2.1 #2 — budget LLM; default sementara 20,
+    # bisa diubah PO via env tanpa deploy kode).
+    scan_daily_limit: int = 20
+    scan_image_max_mb: int = 5
+    scan_cache_ttl_hours: int = 24  # cache Redis per hash foto (PRD §5.10 #6)
+    scan_cache_schema: str = "v1"  # naikkan utk menggusur cache lama saat prompt berubah
 
     @property
     def cors_origin_list(self) -> list[str]:

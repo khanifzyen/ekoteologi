@@ -16,6 +16,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
 *.egg-info/
 
 # Upload lokal API (avatar) — api/app/api/profile.py menulis ke UPLOAD_DIR

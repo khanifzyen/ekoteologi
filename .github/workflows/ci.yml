@@ -56,8 +56,8 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
-      - name: Test (pytest)
-        run: uv run pytest -q
+      - name: Test (pytest + coverage ≥70% — DoD §1.4)
+        run: uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 
   admin:
     name: Admin — lint & build

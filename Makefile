@@ -18,6 +18,8 @@ api-lint: ## Lint + cek format API
 	cd api && uv run ruff check . && uv run ruff format --check .
 api-test: ## Jalankan test API (butuh db-up)
 	cd api && uv run pytest
+api-cov: ## Test API + coverage (gate ≥70% — DoD §1.4)
+	cd api && uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 api-migrate: ## Terapkan migrasi Alembic
 	cd api && uv run alembic upgrade head
 api-seed: ## Seed data awal (kategori sampah, level, badge) — idempoten

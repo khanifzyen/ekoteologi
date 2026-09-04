@@ -33,19 +33,26 @@ Salin `.env.example` → `.env`. Semua via environment, tidak ada yang hardcode.
 | `GOOGLE_CLIENT_ID` | kosong | Web Client ID Google; tanpa ini `/v1/auth/google` → 503 |
 | `UPLOAD_DIR` / `AVATAR_MAX_MB` | `var/uploads` / `2` | Penyimpanan avatar (volume-kan di prod) |
 | `CORS_ORIGINS` | `http://localhost:5173,…` | Dipisah koma; termasuk `capacitor://localhost` |
-| `LLM_API_KEY` / `LLM_MODEL` / `LLM_BASE_URL` | kosong | Sprint 2 — provider vision via env (PRD §4) |
+| `LLM_MODE` | `mock` | `mock` (default — biaya nol saat dev/test) atau `live` (provider vision) |
+| `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | kosong | Provider vision OpenAI-compatible (PRD §4); wajib utk `live` — tanpa ini fallback ke mock |
+| `LLM_FALLBACK_MODEL` | kosong | Model kedua bila primer gagal setelah retry (PRD §4) |
+| `LLM_TIMEOUT_SECONDS` / `LLM_MAX_RETRIES` / `LLM_RETRY_BACKOFF_SECONDS` | `30` / `1` / `0.5` | Timeout + retry per model (retry juga dipicu respons tidak valid) |
+| `SCAN_DAILY_LIMIT` | `20` | Kuota scan/user/hari (keputusan §2.1 #2 — default sementara, bisa diubah PO) |
+| `SCAN_IMAGE_MAX_MB` | `5` | Batas ukuran foto scan (JPG/PNG/WebP via magic bytes) |
+| `SCAN_CACHE_TTL_HOURS` / `SCAN_CACHE_SCHEMA` | `24` / `v1` | TTL cache Redis per hash foto; naikkan schema utk menggusur cache lama |
 
 ## Struktur
 
 ```
 app/
-├── api/          # router: health, auth (register/login/refresh/google/me), profile, audit-logs
+├── api/          # router: health, auth (register/login/refresh/google/me), profile, scan, audit-logs
 ├── core/         # config (pydantic-settings), security (bcrypt+JWT access/refresh), deps, redis
 ├── db/           # engine & session async
 ├── middleware/   # audit_log.py — pencatatan request mutating
 ├── models/       # 27 tabel PRD §5 (SQLAlchemy 2.0 typed)
 ├── schemas/      # Pydantic request/response
-└── services/     # audit, rate_limit (login), google (verifikasi ID token)
+└── services/     # audit, rate_limit (login), google, llm (adapter+mock+openai-compat),
+                  # scan_cache, scan_limit, ledger (poin), quotes (bank terkurasi)
 alembic/          # migrasi (template async)
 scripts/          # create_admin.py, seed.py (kategori sampah, level, badge)
 tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
@@ -64,7 +71,8 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/profile` | Bearer | Profil + `level`/`level_title` dihitung dari tabel `levels` |
 | PATCH | `/v1/profile` | Bearer | Ubah `full_name`/`city`/`avatar_url` |
 | POST | `/v1/profile/avatar` | Bearer | Multipart `file` (JPG/PNG/WebP, ≤2 MB) → simpan di `UPLOAD_DIR`, `avatar_url` relatif `/uploads/avatars/…` |
-| GET | `/uploads/*` | — | File statis (avatar) |
+| POST | `/v1/scan` | Bearer | Multipart `file` foto (JPG/PNG/WebP, ≤`SCAN_IMAGE_MAX_MB`) → hasil analisis LLM tervalidasi (lihat "Arsitektur Scan AI"). 400/413 foto tidak valid, 429 kuota harian habis, 503 Redis mati (fail-closed), 502 LLM gagal setelah retry+fallback |
+| GET | `/uploads/*` | — | File statis (avatar, foto scan) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
 
@@ -78,6 +86,54 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 - Refresh bersifat stateless; pembatalan akses = `users.is_active = false`.
 - Rate limit login: Redis `INCR`+`EXPIRE` per `email+IP`, sukses menghapus
   hitungan; Redis tidak tersedia → fail-open (dicatat sebagai warning).
+
+### Arsitektur Scan AI (Sprint 2)
+
+**Prinsip (PRD §4):** app tidak pernah memanggil LLM langsung — semua via
+backend: API key aman, rate limit per user, caching, audit (`llm_raw`,
+`llm_meta` di `scans`), fallback model.
+
+`POST /v1/scan` (multipart `file`, Bearer token):
+
+1. Validasi foto (ukuran ≤`SCAN_IMAGE_MAX_MB`, JPG/PNG/WebP via magic bytes).
+2. Kuota harian per user (`SCAN_DAILY_LIMIT`) — Redis `INCR` per user+tanggal,
+   **fail-closed** bila Redis mati (503): pelindung budget LLM (kebalikan rate
+   limit login yang fail-open). Upload rusak tidak memakan kuota.
+3. Cache Redis per **hash SHA-256 foto** (`scan:cache:{env}:{schema}:{hash}`,
+   TTL `SCAN_CACHE_TTL_HOURS`) → HIT: respons instan tanpa LLM (biaya nol);
+   hit/miss dicatat di `scan:stats:{env}:hit|miss` (dasar metrik hit rate
+   ≥70% PRD §8, dashboard menyusul Sprint 4). Cache fail-open (miss saja).
+4. MISS → provider LLM (`get_llm_provider()`): `mock` (default dev/test,
+   deterministik per hash foto) atau `live` (OpenAI-compatible). Retry per
+   model (timeout/429/5xx/respons tidak valid) lalu fallback ke
+   `LLM_FALLBACK_MODEL`; gagal total → 502, tidak tersimpan.
+5. Respons LLM divalidasi ketat (Pydantic `ScanLLMResult`: `{item_name,
+   category, advice, quote, points}`); kategori wajib salah satu kategori DB
+   (dicocokkan case-insensitive). **Quote selalu diganti bank terkurasi**
+   (`services/quotes.py`) — anti-halusinasi (PRD §9).
+6. Poin = min(usulan LLM, `base_points` kategori) → ledger append-only
+   (`services/ledger.py`) + sinkron `users.points` (PRD §5.10 #1). Foto
+   duplikat (hash sama, user sama, hari sama) → poin 0 (anti poin-farming).
+7. Baris `scans` tersimpan lengkap: `llm_raw` (respon mentah) + `llm_meta`
+   ({provider, model, latency_ms, tokens, attempts, fallback_used, cached})
+   — PRD §5.3 — dan foto di `UPLOAD_DIR/scans/` (dilayani `/uploads`).
+
+Contoh respons:
+
+```json
+{
+  "id": 1, "item_name": "Botol plastik bekas air mineral",
+  "category": {"id": 2, "name": "Plastik", "icon": "fa-bottle-water"},
+  "advice": "Kosongkan, bilas, …", "quote": {"text": "…", "source": "QS Al-An'am: 141"},
+  "points": 5, "points_total": 5, "cached": false, "duplicate": false,
+  "image_url": "/uploads/scans/…png", "created_at": "…"
+}
+```
+
+Mengaktifkan provider asli di staging/prod: set `LLM_MODE=live` +
+`LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` (mis. base URL
+`https://open.bigmodel.cn/api/paas/v4` — API OpenAI-compatible); biaya tetap
+nol di dev karena default `mock`.
 
 ## Middleware audit log
 
@@ -99,4 +155,13 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 uv run pytest          # skema test DB disiapkan otomatis (alembic upgrade via subprocess)
 uv run ruff check .
 uv run ruff format --check .
+
+# Coverage (gate ≥70% — DoD §1.4); sama dengan `make api-cov`:
+uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 ```
+
+> Catatan pengukuran: pytest-cov di lingkungan ini **kekurangan-lapor** sebagian
+> baris body endpoint async (teramati juga pada `auth.py` sejak Sprint 1 —
+> frame setelah `await` di tengah request kadang tidak tercatat oleh ketiga
+> tracer core). Angka yang ditampilkan adalah batas bawah; total tetap 88%
+> (gate 70% lolos), modul Sprint 2 (ledger, llm, quotes, cache, limit) 89–100%.
