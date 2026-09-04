@@ -1,8 +1,9 @@
 """Middleware audit log: catat setiap request mutating ke `audit_logs` (Sprint 0, Story 5).
 
 - Hanya POST/PUT/PATCH/DELETE yang dicatat; GET/HEAD/OPTIONS diabaikan.
-- `/health` diabaikan; `/v1/auth/login` diabaikan karena login sudah diaudit
-  eksplisit di endpoint (berikut keterangan sukses/gagal).
+- `/health` dan seluruh `/v1/auth/*` diabaikan — auth diaudit eksplisit di
+  endpoint (login/register/google berikut keterangan sukses/gagal; refresh
+  sengaja tidak diaudit agar tidak berisik).
 - Actor diambil dari JWT Authorization header bila ada dan valid (tanpa query DB).
 - Kegagalan pencatatan audit tidak boleh menggagalkan request utama.
 """
@@ -21,7 +22,8 @@ from app.models import AuditLog
 logger = logging.getLogger("ekoteologi.audit")
 
 AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-SKIP_PATHS = {"/health", "/v1/auth/login"}
+SKIP_PATHS = {"/health"}
+SKIP_PREFIXES = ("/v1/auth/",)
 
 
 def _actor_id_from(request: Request) -> uuid.UUID | None:
@@ -56,6 +58,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         should_audit = (
             request.method in AUDITED_METHODS
             and request.url.path not in SKIP_PATHS
+            and not request.url.path.startswith(SKIP_PREFIXES)
             and not request.url.path.startswith("/docs")
             and not request.url.path.startswith("/openapi")
         )

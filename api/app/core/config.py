@@ -20,11 +20,25 @@ class Settings(BaseSettings):
 
     jwt_secret: str = "dev-secret-ganti-di-produksi"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24
+    access_token_expire_minutes: int = 60  # pendek karena ada refresh token (Sprint 1)
+    refresh_token_expire_days: int = 30  # "Ingat saya" dicentang
+    refresh_token_expire_days_short: int = 1  # tanpa "Ingat saya"
+
+    # Rate limit login (Sprint 1) — fail-open bila Redis tidak tersedia.
+    login_max_attempts: int = 5
+    login_window_minutes: int = 15
+
+    # Google Sign-In: Web Client ID dari Google Cloud Console (aud pada ID token).
+    google_client_id: str = ""
+
+    # Penyimpanan file lokal (avatar). Mount statis di /uploads — volume di prod.
+    upload_dir: str = "var/uploads"
+    avatar_max_mb: int = 2
 
     # Dipisah koma; di-parse lewat cors_origin_list.
     cors_origins: str = (
-        "http://localhost:5173,http://localhost:5174,capacitor://localhost,http://localhost"
+        "http://localhost:5173,http://localhost:5174,http://localhost:5175,"
+        "capacitor://localhost,http://localhost"
     )
 
     # Prasyarat Sprint 2 (implementation-plan §2.2): model & key via env, tidak hardcode.

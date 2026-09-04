@@ -40,13 +40,42 @@ npm run apk
 
 Pasang di perangkat: `adb install android/app/build/outputs/apk/debug/app-debug.apk`.
 
+## Konfigurasi & alur aplikasi (Sprint 1)
+
+Salin `.env.example` → `.env` bila perlu override:
+
+| Var | Default | Keterangan |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8100` | Base URL API. Saat uji di perangkat via Wi-Fi, isi IP LAN mesin dev, mis. `http://192.168.1.10:8100` |
+| `VITE_GOOGLE_CLIENT_ID` | kosong | Web Client ID Google. Kosong → tombol Google memberi pesan bahwa fitur belum aktif |
+
+Alur: splash → onboarding 3 slide (sekali, ditandai `ekoteologi_onboarded` di
+localStorage) → masuk/daftar (`AuthView`, mockup `auth.html`) → beranda.
+Guard router: layar beranda/profil butuh sesi; user yang sudah masuk tidak
+melihat layar masuk lagi.
+
+Sesi: pasangan access+refresh JWT disimpan di localStorage klien
+(`ekoteologi_access` / `ekoteologi_refresh`). `src/api/client.ts` mengulang
+request sekali setelah refresh sukses; gagal → sesi dibuang → kembali ke
+layar masuk. Keluar: tombol di `ProfileView`.
+
+Google Sign-In: endpoint API `/v1/auth/google` sudah siap (verifikasi ID token
+di server). Sisi klien native menunggu (1) OAuth client dari Google Cloud dan
+(2) plugin komunitas yang kompatibel Capacitor 8 (plugin `@codetrix-studio`
+masih peer Capacitor 6) — lihat catatan di `src/services/googleAuth.ts`.
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.
 - `src/styles/tokens.css` — salinan `docs/desain/tokens.css` (satu sumber di docs).
 - `src/styles/base.css` — salinan mockup `base.css` minus bagian demo-bar (khusus mockup).
+- `src/styles/app.css` — gaya di luar mockup D1 (splash/onboarding/auth/profil), tetap 100% token.
 - Komponen inti `src/components/ui/`: Button, Card, Chip, Input, Tabs, Skeleton, ToastHost.
-- `src/views/HomeView.vue` — placeholder beranda (header melengkung + bottom nav + FAB);
-  home penuh dirakit di Sprint 3–6, auth Sprint 1, scan Sprint 3.
+- Komponen state `src/components/state/` (Sprint 1): StateSkeleton, StateEmpty, StateError,
+  OfflineBar (bar "luring" otomatis via event `online`/`offline`).
+- `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (dipakai Beranda & Profil).
+- `src/views/`: OnboardingView (splash + 3 slide), AuthView (masuk/daftar + validasi),
+  HomeView (sapaan nama + avatar + level), ProfileView (lihat/ubah profil, unggah avatar, keluar).
+- `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout).
 - Font & ikon di-bundle lokal (fontsource + `@fortawesome/fontawesome-free@6`) agar app
   berjalan offline — tanpa CDN.

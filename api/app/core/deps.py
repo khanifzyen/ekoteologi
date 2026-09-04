@@ -5,8 +5,10 @@ from collections.abc import AsyncGenerator
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import get_redis
 from app.core.security import decode_access_token
 from app.db.session import get_session_factory
 from app.models import User
@@ -17,6 +19,10 @@ bearer_scheme = HTTPBearer(auto_error=False)
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with get_session_factory()() as session:
         yield session
+
+
+def get_redis_dep() -> Redis:
+    return get_redis()
 
 
 async def get_current_user(

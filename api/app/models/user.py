@@ -18,6 +18,9 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True)
     password_hash: Mapped[str | None] = mapped_column(Text)
+    google_sub: Mapped[str | None] = mapped_column(
+        String(64), unique=True
+    )  # Subject ID token Google (Sprint 1)
     full_name: Mapped[str] = mapped_column(String(100))
     avatar_url: Mapped[str | None] = mapped_column(Text)
     role: Mapped[str] = mapped_column(

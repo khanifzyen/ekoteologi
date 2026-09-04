@@ -3,12 +3,27 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    remember: bool = True  # "Ingat saya": refresh 30 hari vs 1 hari
+
+
+class RegisterRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
 
 
 class UserPublic(BaseModel):
@@ -25,6 +40,7 @@ class UserPublic(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserPublic
 

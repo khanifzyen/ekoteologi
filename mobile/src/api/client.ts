@@ -1,4 +1,4 @@
-/** Klien HTTP minimal untuk API FastAPI (tanpa dependensi eksternal). */
+/** Klien HTTP mobile untuk API FastAPI — access token + auto-refresh (Sprint 1). */
 
 export class ApiError extends Error {
   status: number
@@ -12,10 +12,19 @@ export class ApiError extends Error {
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8100'
 
+export const API_BASE_URL = BASE_URL
+
+/** URL absolut untuk path relatif dari API (mis. avatar `/uploads/...`). */
+export function apiUrl(path: string): string {
+  return path.startsWith('http') || path.startsWith('blob:') ? path : `${BASE_URL}${path}`
+}
+
 interface TokenProvider {
   getAccessToken: () => string | null
   getRefreshToken: () => string | null
+  /** Simpan pasangan token baru hasil rotasi refresh. */
   onRefreshed: (access: string, refresh: string) => void
+  /** Refresh ditolak (token kedaluwarsa/akun nonaktif) — sesi diakhiri. */
   onSessionExpired: () => void
 }
 
@@ -26,7 +35,7 @@ let tokenProvider: TokenProvider = {
   onSessionExpired: () => {},
 }
 
-/** Dipanggil auth store agar klien bisa melakukan auto-refresh (Sprint 1). */
+/** Dipanggil auth store saat dibuat agar klien tahu ke mana menengok token. */
 export function bindTokenProvider(provider: TokenProvider) {
   tokenProvider = provider
 }
@@ -34,42 +43,47 @@ export function bindTokenProvider(provider: TokenProvider) {
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
-  token?: string | null
-  /** Dipakai internal: jangan coba refresh lagi pada retry. */
+  formData?: FormData
+  /** Lampirkan Authorization header (default: true bila ada token). */
+  auth?: boolean
+  /** Coba refresh token lalu ulang sekali saat 401 (dipakai internal). */
   _retried?: boolean
 }
 
-export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+async function parseDetail(resp: Response): Promise<string | null> {
+  const data = (await resp.json().catch(() => null)) as { detail?: unknown } | null
+  if (typeof data?.detail === 'string') return data.detail
+  return null
+}
+
+async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers: Record<string, string> = {}
+  const wantsAuth = options.auth !== false
+  const token = tokenProvider.getAccessToken()
+  if (wantsAuth && token) headers['Authorization'] = `Bearer ${token}`
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
-  if (options.token) headers['Authorization'] = `Bearer ${options.token}`
 
   let resp: Response
   try {
     resp = await fetch(`${BASE_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: options.formData ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
     })
   } catch {
     throw new ApiError(0, 'Tidak dapat terhubung ke server. Periksa koneksi Anda.')
   }
 
-  if (resp.status === 401 && options.token && !options._retried) {
+  if (resp.status === 401 && wantsAuth && token && !options._retried) {
     const refreshed = await tryRefresh()
-    if (refreshed) return api<T>(path, { ...options, token: tokenProvider.getAccessToken(), _retried: true })
+    if (refreshed) return request<T>(path, { ...options, _retried: true })
   }
 
-  const data = (await resp.json().catch(() => null)) as { detail?: string } & Record<
-    string,
-    unknown
-  >
   if (!resp.ok) {
-    const detail =
-      typeof data?.detail === 'string' ? data.detail : 'Terjadi kesalahan pada server.'
+    const detail = (await parseDetail(resp)) ?? 'Terjadi kesalahan pada server.'
     throw new ApiError(resp.status, detail)
   }
-  return data as T
+  return (await resp.json()) as T
 }
 
 let refreshInFlight: Promise<boolean> | null = null
@@ -102,4 +116,6 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight
 }
 
-export const API_BASE_URL = BASE_URL
+export function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  return request<T>(path, options)
+}

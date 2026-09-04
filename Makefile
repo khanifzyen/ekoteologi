@@ -1,5 +1,5 @@
 # Perintah harian monorepo Ekoteologi AR (lihat README.md).
-.PHONY: help db-up db-down api-install api-lint api-test api-migrate api-run \
+.PHONY: help db-up db-down api-install api-lint api-test api-migrate api-seed api-run \
         admin-install admin-dev admin-build mobile-install mobile-dev mobile-build apk
 
 help:
@@ -20,6 +20,8 @@ api-test: ## Jalankan test API (butuh db-up)
 	cd api && uv run pytest
 api-migrate: ## Terapkan migrasi Alembic
 	cd api && uv run alembic upgrade head
+api-seed: ## Seed data awal (kategori sampah, level, badge) — idempoten
+	cd api && uv run python -m scripts.seed
 api-run: ## Jalankan API lokal (uvicorn, auto-reload)
 	cd api && uv run uvicorn app.main:app --reload --port 8000
 

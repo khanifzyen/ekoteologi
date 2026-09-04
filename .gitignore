@@ -18,6 +18,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
+# Upload lokal API (avatar) — api/app/api/profile.py menulis ke UPLOAD_DIR
+api/var/
+
 # ── Android (Capacitor) ──
 mobile/android/.gradle/
 mobile/android/build/

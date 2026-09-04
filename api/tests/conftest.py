@@ -80,10 +80,17 @@ async def engine():
 @pytest.fixture(autouse=True)
 async def clean_tables(engine):
     yield
-    # Bersihkan semua tabel setelah tiap test (urut FK via TRUNCATE CASCADE).
+    # Bersihkan semua tabel setelah tiap test (urut FK via TRUNCATE CASCADE)
+    # + flush Redis (rate limit login & cache tidak boleh bocor antar test).
+    from app.core.redis import get_redis
+
     tables = ", ".join(f'"{t}"' for t in Base.metadata.tables)
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    try:
+        await get_redis().flushdb()
+    except Exception:  # noqa: BLE001 — Redis opsional di lingkungan test
+        pass
 
 
 @pytest.fixture

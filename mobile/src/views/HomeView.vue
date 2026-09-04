@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import { ApiError, apiUrl } from '@/api/client'
+import BottomNav from '@/components/layout/BottomNav.vue'
+import StateEmpty from '@/components/state/StateEmpty.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
-import BaseCard from '@/components/ui/BaseCard.vue'
-
+const router = useRouter()
 const toast = useToastStore()
+const auth = useAuthStore()
 
 const today = new Intl.DateTimeFormat('id-ID', {
   weekday: 'long',
@@ -12,120 +19,129 @@ const today = new Intl.DateTimeFormat('id-ID', {
   year: 'numeric',
 }).format(new Date())
 
-// Navigasi bawah sesuai mockup beranda.html; layar tujuan dibangun di Sprint 1–7.
-const navLeft = [
-  { label: 'Beranda', icon: 'fa-house', active: true },
-  { label: 'Misi', icon: 'fa-bullseye' }, // Sprint 4
-]
-const navRight = [
-  { label: 'Belajar', icon: 'fa-book-open' }, // Sprint 7
-  { label: 'Profil', icon: 'fa-user' }, // Sprint 1
-]
+const greeting = computed(() =>
+  auth.firstName ? `Assalamu’alaikum, ${auth.firstName}` : 'Assalamu’alaikum',
+)
+const levelLabel = computed(() => {
+  if (!auth.profile) return 'Lvl 1 · Pemula'
+  return `Lvl ${auth.profile.level} · ${auth.profile.level_title}`
+})
 
-function onNav(label: string) {
-  toast.show(`Layar ${label} menyusul di sprint berikutnya.`)
-}
+const avatarSrc = computed(() => {
+  const url = auth.user?.avatar_url
+  return url ? apiUrl(url) : null
+})
+
+const headerLoading = ref(true)
+
+onMounted(async () => {
+  try {
+    await auth.ensureProfile()
+  } catch (err) {
+    // Header tetap tampil dengan nilai default; gagal jaringan tidak memblokir beranda.
+    if (err instanceof ApiError && err.status === 0) toast.show('Menampilkan data lokal (luring).')
+  } finally {
+    headerLoading.value = false
+  }
+})
 </script>
 
 <template>
   <!-- Header melengkung — signature mockup (base.css .header-curved) -->
   <header class="header-curved">
-    <p class="greeting">
-      {{ today }}
-    </p>
-    <div class="head-row">
-      <h1 class="screen-title">
-        Assalamu’alaikum
-      </h1>
-      <span class="level-pill">
+    <div class="home-top">
+      <div class="h-greet">
+        <p class="greeting">
+          {{ today }}
+        </p>
+        <h1 class="screen-title">
+          {{ greeting }}
+        </h1>
+        <p class="h-sub">
+          Mari pilah sampah hari ini
+        </p>
+      </div>
+      <button
+        class="avatar"
+        type="button"
+        aria-label="Buka profil"
+        @click="router.push({ name: 'profil' })"
+      >
+        <img
+          v-if="avatarSrc"
+          :src="avatarSrc"
+          alt=""
+        >
         <i
-          class="fas fa-seedling"
+          v-else-if="!headerLoading"
+          class="fas fa-user"
           aria-hidden="true"
         />
-        Lvl 1 · Pemula
-      </span>
+        <span
+          v-else
+          class="skeleton sk-circle"
+        />
+      </button>
     </div>
+    <span class="level-pill">
+      <i
+        class="fas fa-seedling"
+        aria-hidden="true"
+      />
+      {{ levelLabel }}
+    </span>
   </header>
 
   <main class="content-overlap">
-    <BaseCard>
-      <div class="empty">
-        <div class="empty-icon">
-          <i
-            class="fas fa-camera"
-            aria-hidden="true"
-          />
-        </div>
-        <h3>Scan fitur pertama Anda</h3>
-        <p>
-          Ambil foto sampah lewat tombol kamera di bawah untuk mendapat poin dan saran
-          pembuangan. Layar beranda lengkap tampil di Sprint 3–6.
-        </p>
-      </div>
-    </BaseCard>
+    <StateEmpty
+      icon="fa-camera"
+      title="Scan fitur pertama Anda"
+      text="Ambil foto sampah lewat tombol kamera di bawah untuk mendapat poin dan saran pembuangan. Layar beranda lengkap tampil di Sprint 3–6."
+    />
   </main>
 
-  <!-- Bottom nav + FAB (base.css) — FAB tinggi 65px di tengah nav -->
-  <div class="nav-wrap">
-    <button
-      class="fab"
-      type="button"
-      aria-label="Buka kamera scan (tampil di Sprint 3)"
-      @click="toast.show('Kamera scan tampil di Sprint 3.')"
-    >
-      <i
-        class="fas fa-camera"
-        aria-hidden="true"
-      />
-    </button>
-    <nav
-      class="bottom-nav"
-      aria-label="Navigasi utama"
-    >
-      <a
-        v-for="item in navLeft"
-        :key="item.label"
-        href="#"
-        class="nav-item"
-        :class="{ active: item.active }"
-        :aria-current="item.active ? 'page' : undefined"
-        @click.prevent="!item.active && onNav(item.label)"
-      >
-        <i
-          class="fas"
-          :class="item.icon"
-          aria-hidden="true"
-        />
-        {{ item.label }}
-      </a>
-      <span
-        class="nav-spacer"
-        aria-hidden="true"
-      />
-      <a
-        v-for="item in navRight"
-        :key="item.label"
-        href="#"
-        class="nav-item"
-        @click.prevent="onNav(item.label)"
-      >
-        <i
-          class="fas"
-          :class="item.icon"
-          aria-hidden="true"
-        />
-        {{ item.label }}
-      </a>
-    </nav>
-  </div>
+  <BottomNav active="home" />
 </template>
 
 <style scoped>
-.head-row {
+.home-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.h-sub {
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  margin-top: 2px;
+}
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--gold);
+  flex: none;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 18px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar .sk-circle {
+  width: 100%;
+  height: 100%;
+}
+.level-pill {
+  display: inline-flex;
+  margin-top: var(--space-3);
 }
 </style>
