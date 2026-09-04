@@ -35,7 +35,7 @@ Bukti cepat (kriteria demo Sprint 6):
 |---|---|
 | Beranda identik mockup dgn data nyata | ✅ Susunan final: header (Poin Kebaikan + avatar + pill level) → streak → dampak ("Tumbuh menjadi tunas — butuh 2 aksi lagi" dari 3 aksi nyata) → kutipan hari ini (ayat terjadwal dgn aksi) → mini misi ("Scan 3 Jenis Sampah" 1/3) → menu utama → FAB + bottom nav. Smoke E2E 22 langkah menutup data semua widget |
 | Badge muncul otomatis setelah aksi | ✅ Scan pertama → lencana "Langkah Kecil" + notifikasi `info` dalam transaksi scan yang sama (on-event); klaim manual → "Misi Pertama" (2/10 diraih); rekor streak 7 hari → lencana muncul lazy saat `GET /v1/badges`; idempoten (muat ulang = tetap 1 baris) |
-| CI hijau | ✅ run #14 pada commit fitur — 4/4 job hijau (api, admin, mobile, android-apk) — detail §6 |
+| CI hijau | ✅ run #15 pada `7d9347a` (push commit fitur `4f75980` + laporan) — 4/4 job hijau (api, admin, mobile, android-apk) — detail §6 |
 
 ---
 
@@ -136,7 +136,7 @@ Bukti cepat (kriteria demo Sprint 6):
 | APK debug | `cap sync android` + `./gradlew assembleDebug` | ✅ BUILD SUCCESSFUL — `app-debug.apk` 9,9 MB (naik dari 5,7 MB: plugin push); CI juga memproduksinya |
 | Smoke E2E Sprint 6 | uvicorn lokal (DB `ekoteologi_smoke`, mock LLM) + klien httpx | ✅ 22 langkah: fallback kutipan → admin jadwalkan konten (409 tanggal ganda, geser tanggal → Tayang) → konten tayang di `daily-content` → scan +5 → lencana "Langkah Kecil" + notif (1/10) → profil dampak (scan=1, badge=1, lvl 10%) → klaim manual +10 → lencana "Misi Pertama" on-event (2/10) → leaderboard rank 1 dgn `me` → register token ×2 idempoten → approve photo +50 → DB: 1 baris `fcm_tokens`, 2 baris `user_badges` → hapus token → streak aktif + notif verifikasi |
 | Push terpicu saat approve | test caplog (`test_approve_memicu_push_ke_token_terdaftar`) | ✅ token terdaftar → log `PUSH (mode=log) … 'Misi disetujui!'` saat review approve (pengiriman FCM nyata menunggu kredensial — §5.3) |
-| CI GitHub | run #14 (commit fitur) | ✅ sukses — api (ruff + 211 pytest + coverage gate), admin (lint+vitest+build), mobile (lint+vitest+build), android-apk |
+| CI GitHub | run #15 (`7d9347a`, push commit fitur + laporan) | ✅ sukses — api (ruff + 211 pytest + coverage gate), admin (lint+vitest+build), mobile (lint+vitest+build), android-apk |
 | Verifikasi browser interaktif & perangkat Android nyata | — | ⚠️ Belum di sesi ini (tool browser & perangkat tidak tersedia — item terbuka sejak Sprint 0); UI ditutup unit/component test + typecheck + build + APK; smoke E2E menutup alur di tingkat API |
 
 ---
@@ -218,7 +218,7 @@ Bukti cepat (kriteria demo Sprint 6):
 
 ## 6. DoD Sprint 6 — Checklist
 
-- [x] CI hijau di GitHub: run #14 pada commit fitur **success** (4/4 job) — api (ruff +
+- [x] CI hijau di GitHub: run #15 pada `7d9347a` **success** (4/4 job) — api (ruff +
       211 pytest + coverage gate 70%), admin (lint + vitest + build), mobile (lint +
       vitest + build), android-apk + artefak APK. Verifikasi lokal: 211 pytest
       (coverage 80,90%), 66+14 vitest, lint bersih, build ketiga app + APK debug.
