@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { ApiError, apiUrl } from '@/api/client'
 import BottomNav from '@/components/layout/BottomNav.vue'
-import StateEmpty from '@/components/state/StateEmpty.vue'
+import { fetchHistory } from '@/services/scan'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -33,6 +33,7 @@ const avatarSrc = computed(() => {
 })
 
 const headerLoading = ref(true)
+const scanTotal = ref<number | null>(null)
 
 onMounted(async () => {
   try {
@@ -42,6 +43,13 @@ onMounted(async () => {
     if (err instanceof ApiError && err.status === 0) toast.show('Menampilkan data lokal (luring).')
   } finally {
     headerLoading.value = false
+  }
+  // Hitungan riwayat untuk kartu menu (best-effort — tidak memblokir beranda).
+  try {
+    const page = await fetchHistory({ limit: 1 })
+    scanTotal.value = page.total
+  } catch {
+    scanTotal.value = null
   }
 })
 </script>
@@ -93,11 +101,61 @@ onMounted(async () => {
   </header>
 
   <main class="content-overlap">
-    <StateEmpty
-      icon="fa-camera"
-      title="Scan fitur pertama Anda"
-      text="Ambil foto sampah lewat tombol kamera di bawah untuk mendapat poin dan saran pembuangan. Layar beranda lengkap tampil di Sprint 3–6."
-    />
+    <!-- Menu utama (beranda.html) — kartu scan signature + riwayat; penuh di Sprint 6 -->
+    <div class="menu-grid">
+      <button
+        class="menu-card menu-ar"
+        type="button"
+        @click="router.push({ name: 'scan' })"
+      >
+        <i
+          class="fas fa-camera"
+          aria-hidden="true"
+        />
+        <strong>Scan Sampah "AR"</strong>
+        <span>Kamera + AI · dapatkan poin</span>
+      </button>
+      <button
+        class="menu-card"
+        type="button"
+        @click="router.push({ name: 'riwayat' })"
+      >
+        <i
+          class="fas fa-clock-rotate-left"
+          aria-hidden="true"
+        />
+        <strong>Riwayat Scan</strong>
+        <span>
+          <template v-if="scanTotal === null">Cek aktivitasmu</template>
+          <template v-else-if="scanTotal === 0">Belum ada scan</template>
+          <template v-else>{{ scanTotal }} scan tercatat</template>
+        </span>
+      </button>
+      <button
+        class="menu-card"
+        type="button"
+        @click="toast.show('Layar Misi menyusul di Sprint 4.')"
+      >
+        <i
+          class="fas fa-bullseye"
+          aria-hidden="true"
+        />
+        <strong>Misi</strong>
+        <span>Segera hadir</span>
+      </button>
+      <button
+        class="menu-card"
+        type="button"
+        @click="toast.show('E-Learning menyusul di Sprint 7.')"
+      >
+        <i
+          class="fas fa-book-open"
+          aria-hidden="true"
+        />
+        <strong>E-Learning</strong>
+        <span>Segera hadir</span>
+      </button>
+    </div>
   </main>
 
   <BottomNav active="home" />
@@ -143,5 +201,66 @@ onMounted(async () => {
 .level-pill {
   display: inline-flex;
   margin-top: var(--space-3);
+}
+
+/* ── Menu grid (beranda.html) ── */
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.menu-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 108px;
+  text-align: center;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-out);
+  font-family: var(--font-body);
+}
+.menu-card:hover {
+  transform: translateY(-2px);
+}
+.menu-card:active {
+  transform: scale(0.96);
+}
+.menu-card i {
+  font-size: 24px;
+  color: var(--color-primary);
+}
+.menu-card strong {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+}
+.menu-card span {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+.menu-ar {
+  grid-column: span 2;
+  background: var(--color-header-grad);
+  border-color: var(--color-surface);
+  box-shadow: var(--shadow-2);
+}
+.menu-ar i {
+  color: var(--gold-light);
+  font-size: 28px;
+}
+.menu-ar strong {
+  color: var(--color-on-dark);
+  font-size: var(--text-md);
+}
+.menu-ar span {
+  color: color-mix(in srgb, var(--color-on-dark) 80%, transparent);
 }
 </style>

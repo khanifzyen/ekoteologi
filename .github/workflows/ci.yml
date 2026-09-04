@@ -91,6 +91,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run test
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:

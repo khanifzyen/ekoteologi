@@ -15,10 +15,11 @@ from app.models.gamification import Badge, PointTransaction, UserBadge
 from app.models.mission import Mission, UserMission
 from app.models.reward import Redemption, Reward
 from app.models.scan import Scan, WasteCategory
-from app.models.system import AppSetting, AuditLog, Notification
+from app.models.system import AnalyticsEvent, AppSetting, AuditLog, Notification
 from app.models.user import FcmToken, Level, User
 
 __all__ = [
+    "AnalyticsEvent",
     "AppSetting",
     "AuditLog",
     "Badge",

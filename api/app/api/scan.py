@@ -27,6 +27,7 @@ from app.schemas.scan import Quote, ScanCategoryOut, ScanResponse
 from app.services import scan_cache, scan_limit
 from app.services.ledger import award_points
 from app.services.llm import LLMError, get_llm_provider
+from app.services.metrics import EVENT_SCAN_PERTAMA, track_event
 from app.services.quotes import quote_for_category
 
 logger = logging.getLogger("ekoteologi.scan")
@@ -159,6 +160,12 @@ async def create_scan(
     duplicate = await scan_limit.register_scan_fingerprint(redis, user.id, digest)
     points = 0 if duplicate else min(llm_points, category.base_points)
 
+    # Gate aktivasi (PRD §8): event `scan_pertama` dicatat pada scan PERTAMA
+    # user — dihitung sebelum baris baru ditambahkan, ikut transaksi yang sama.
+    is_first_scan = (
+        await db.scalar(select(func.count()).select_from(Scan).where(Scan.user_id == user.id))
+    ) == 0
+
     scan = Scan(
         user_id=user.id,
         image_url=_save_image(data, mime),
@@ -177,6 +184,13 @@ async def create_scan(
         await award_points(
             db, user=user, amount=points, source="scan", ref_id=scan.id, note=f"Scan: {item_name}"
         )
+    if is_first_scan:
+        await track_event(
+            db,
+            user_id=user.id,
+            name=EVENT_SCAN_PERTAMA,
+            payload={"scan_id": scan.id, "category": category.name, "points": points},
+        )
     await db.commit()
     await db.refresh(scan)
 
@@ -190,6 +204,8 @@ async def create_scan(
         cached,
         duplicate,
     )
+    if is_first_scan:
+        logger.info("EVENT scan_pertama user=%s scan=%s (aktivasi — PRD §8)", user.id, scan.id)
     return ScanResponse(
         id=scan.id,
         item_name=scan.item_name,

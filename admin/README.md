@@ -13,6 +13,22 @@ Panel admin (Vue 3 + Vite + TypeScript + Pinia + Vue Router). Acuan visual: `doc
 - Komponen inti: `BaseButton`, `BaseCard`, `BaseChip`, `BaseInput`, `BaseTabs`,
   `BaseSkeleton`, `ToastHost` (`src/components/ui/`) — semua memakai token.
 
+## Dashboard KPI (Sprint 3)
+
+`DashboardView` kini menampilkan **KPI cards read-only** sesuai mockup
+`admin/index.html` (pola `.panel.kpi`), sumber data `GET /v1/admin/kpi`:
+
+| Kartu | Sumber data |
+|---|---|
+| Pengguna Terdaftar (+baru 7 hari) | `users` |
+| Total Scan Hari Ini (+total) | `scans` |
+| Antrian Verifikasi (menunggu review — terisi mulai Sprint 4) | `user_missions` status `pending` |
+| Cache LLM Hit Rate (hit/miss) | penghitung Redis `scan:stats:*` |
+
+State lengkap: skeleton saat memuat, error + Coba Lagi, tombol Segarkan.
+Biaya LLM (mode mock = Rp0) dan grafik scan harian/kategori menyusul Sprint 4
+sesuai implementation-plan.
+
 ## Perintah
 
 ```bash
@@ -35,12 +51,12 @@ Salin `.env.example` → `.env`:
 ```
 src/
 ├── api/client.ts       # fetch wrapper + ApiError (pesan dari detail backend)
-├── components/ui/      # komponen inti (Story Sprint 0)
+├── components/         # KpiCard (Sprint 3) + komponen inti ui/ (Sprint 0)
 ├── layouts/AdminShell  # sidebar + topbar + drawer (mockup index.html)
 ├── router/index.ts     # rute + role guard
 ├── stores/             # auth (sesi+role), toast
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
-└── views/              # LoginView, DashboardView (placeholder — KPI Sprint 3–4)
+└── views/              # LoginView, DashboardView (KPI cards read-only — Sprint 3)
 ```
 
 Catatan: modul menu lain (Pengguna, Verifikasi, Misi, dst.) sengaja nonaktif dengan toast

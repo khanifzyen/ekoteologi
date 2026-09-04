@@ -10,6 +10,7 @@ Frame aplikasi 480px terpusat di desktop, safe-area (`viewport-fit=cover` +
 npm ci
 npm run dev        # web dev server http://localhost:5173 (host: true untuk uji via Wi-Fi)
 npm run lint
+npm test           # vitest (unit + component test — Sprint 3)
 npm run build      # vue-tsc + vite build → dist/
 
 npm run cap:sync   # build web + salin ke proyek Android
@@ -64,6 +65,33 @@ di server). Sisi klien native menunggu (1) OAuth client dari Google Cloud dan
 (2) plugin komunitas yang kompatibel Capacitor 8 (plugin `@codetrix-studio`
 masih peer Capacitor 6) — lihat catatan di `src/services/googleAuth.ts`.
 
+## Scan AI (Sprint 3)
+
+Alur signature: FAB beranda → `/scan` (`ScanView`, mockup `scan.html`, polish 1:1):
+consent foto (PRD §9, kartu `ConsentCard`) → izin kamera → preview + overlay
+frame (garis sudut, grid, sweep ambient) → shutter (flash) → `POST /v1/scan` →
+sheet hasil slide-up dengan stagger (nama item, tag kategori, chip `+N POIN`,
+saran pembuangan, kutipan dari bank server) → "Saya Sudah Pilah (+N Poin)".
+Sheet error memetakan 429 (kuota harian + reset dari header `Retry-After`),
+502 (gagal mengenali + tips kualitas foto), 413/400 (foto), 0 (luring).
+
+- **Kamera**: preview langsung via `getUserMedia` (WebView/browser standar,
+  `src/services/camera.ts`) — tanpa plugin native, sesuai mitigasi risiko
+  plan §6 (plugin camera-preview tidak konsisten antar vendor). Fallback
+  resmi: **Pilih dari Galeri** (input file statis, setara `@capacitor/camera`
+  tanpa dependensi). Torch best-effort (hanya bila track mendukung).
+  Foto di-capture ke JPEG ≤1280px (hemat kuota & unggah).
+- **Consent foto** (`src/utils/consent.ts`): disimpan lokal
+  (`ekoteologi_consent_foto`); wajib disetujui sebelum unggah pertama.
+  Pencatatan consent di server menyusul Sprint 4 bersama bukti misi.
+- **Poin & kuota**: `points_total` dari respons disinkronkan ke auth store;
+  sisa kuota ditampilkan via `GET /v1/scans/quota` (pill di bawah status),
+  disembunyikan bila API tidak tersedia. Latensi tiap scan dicatat di
+  localStorage (`ekoteologi_scan_perf`, maks 20 entri) untuk uji lapangan.
+- **Riwayat**: `/riwayat` (`HistoryView`) — filter chips kategori
+  (`GET /v1/scans/categories`), dikelompokkan Hari ini/Kemarin/tanggal,
+  pagination "Muat lagi", state skeleton/empty/error lengkap.
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.
@@ -73,9 +101,18 @@ masih peer Capacitor 6) — lihat catatan di `src/services/googleAuth.ts`.
 - Komponen inti `src/components/ui/`: Button, Card, Chip, Input, Tabs, Skeleton, ToastHost.
 - Komponen state `src/components/state/` (Sprint 1): StateSkeleton, StateEmpty, StateError,
   OfflineBar (bar "luring" otomatis via event `online`/`offline`).
-- `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (dipakai Beranda & Profil).
-- `src/views/`: OnboardingView (splash + 3 slide), AuthView (masuk/daftar + validasi),
-  HomeView (sapaan nama + avatar + level), ProfileView (lihat/ubah profil, unggah avatar, keluar).
-- `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout).
+- `src/components/scan/ConsentCard.vue` — kartu persetujuan foto (PRD §9),
+  reusable untuk unggah bukti misi (Sprint 4).
+- `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (FAB → `/scan`).
+- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat + level),
+  ScanView (signature, Sprint 3), HistoryView (riwayat + filter, Sprint 3),
+  ProfileView.
+- `src/services/`: `camera.ts` (getUserMedia + capture JPEG + torch + galeri),
+  `scan.ts` (endpoint `/v1/scan*`). `src/utils/` — `scan.ts` (latensi, peta
+  error, kuota; teruji vitest), `datetime.ts`, `consent.ts`.
+- `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout
+  + `applyPoints`).
+- Test: `npm test` (vitest + happy-dom) — unit helper `src/utils` + component
+  `ConsentCard`.
 - Font & ikon di-bundle lokal (fontsource + `@fortawesome/fontawesome-free@6`) agar app
   berjalan offline — tanpa CDN.

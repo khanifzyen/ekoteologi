@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
+
 import { useToastStore } from '@/stores/toast'
 
 const props = defineProps<{
@@ -6,9 +8,10 @@ const props = defineProps<{
   active: 'home' | 'misi' | 'belajar' | 'profil'
 }>()
 
+const router = useRouter()
 const toast = useToastStore()
 
-// Layar tujuan dibangun bertahap (implementation-plan Sprint 3–7).
+// Layar tujuan dibangun bertahap (implementation-plan Sprint 4–7).
 const items = [
   { key: 'home', label: 'Beranda', icon: 'fa-house', sprint: null },
   { key: 'misi', label: 'Misi', icon: 'fa-bullseye', sprint: 'Sprint 4' },
@@ -16,8 +19,9 @@ const items = [
   { key: 'profil', label: 'Profil', icon: 'fa-user', sprint: null },
 ] as const
 
+// FAB kamera → layar scan (Sprint 3 — fitur signature).
 function onFab() {
-  toast.show('Kamera scan tampil di Sprint 3.')
+  void router.push({ name: 'scan' })
 }
 
 function onItem(item: (typeof items)[number]) {
@@ -30,7 +34,7 @@ function onItem(item: (typeof items)[number]) {
     <button
       class="fab"
       type="button"
-      aria-label="Buka kamera scan (tampil di Sprint 3)"
+      aria-label="Buka pemindai sampah"
       @click="onFab"
     >
       <i

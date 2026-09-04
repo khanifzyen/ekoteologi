@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api import audit, auth, health, profile, scan
+from app.api import admin_dashboard, audit, auth, health, profile, scan, scan_history
 from app.core.config import get_settings
 from app.core.redis import close_redis
 from app.middleware.audit_log import AuditLogMiddleware
@@ -41,6 +41,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(profile.router)
     app.include_router(scan.router)
+    app.include_router(scan_history.router)
+    app.include_router(admin_dashboard.router)
     app.include_router(audit.router)
     app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
     return app

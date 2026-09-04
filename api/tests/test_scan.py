@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.core.deps import get_redis_dep
 from app.core.redis import get_redis
 from app.main import app
-from app.models import PointTransaction, Scan, WasteCategory
+from app.models import AnalyticsEvent, PointTransaction, Scan, WasteCategory
 from app.services.llm import LLMError, MockProvider
 from app.services.quotes import quote_for_category
 from app.services.scan_cache import cache_stats, image_digest
@@ -206,6 +206,24 @@ async def test_scan_llm_gagal_502_tidak_tersimpan(client, member_user, db_sessio
 
 async def test_scan_digest_selalu_sama_untuk_foto_sama():
     assert image_digest(PNG) == image_digest(PNG)
+
+
+async def test_scan_pertama_event_aktivasi_tercatat_sekali(client, member_user, db_session):
+    """Gate Sprint 3 (PRD §8): event `scan_pertama` hanya pada scan PERTAMA user."""
+    await seed()
+    token = await login_token(client, member_user.email, "password123")
+
+    assert (await _scan(client, token)).status_code == 200
+    assert (await _scan(client, token, PNG_LAIN)).status_code == 200
+
+    events = (
+        await db_session.scalars(
+            select(AnalyticsEvent).where(AnalyticsEvent.name == "scan_pertama")
+        )
+    ).all()
+    assert len(events) == 1
+    assert events[0].user_id == member_user.id
+    assert events[0].payload["points"] >= 0 and "category" in events[0].payload
 
 
 async def test_quote_bank_meliputi_kategori_seed():

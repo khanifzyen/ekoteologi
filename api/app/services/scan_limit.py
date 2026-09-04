@@ -55,6 +55,26 @@ def _seconds_until_midnight() -> int:
     return max(60, int((tomorrow - now).total_seconds()))
 
 
+def seconds_until_reset() -> int:
+    """Detik hingga kuota harian reset (tengah malam waktu lokal)."""
+    return _seconds_until_midnight()
+
+
+async def peek_quota(redis: Redis, user_id: UUID) -> tuple[int, int] | None:
+    """Baca kuota terpakai TANPA mengkonsumsi (GET, bukan INCR).
+
+    Kembalikan `(used, limit)`; `None` bila Redis tidak dapat dihubungi —
+    pemanggil menentukan degrade-nya (endpoint kuota → 503, UI menyembunyikan
+    pill kuota). Kontras dgn `consume_scan_quota` yang fail-closed mutlak.
+    """
+    try:
+        raw = await redis.get(_limit_key(user_id))
+    except RedisError:
+        logger.warning("Redis tidak tersedia — info kuota scan tidak dapat dibaca.")
+        return None
+    return int(raw or 0), get_settings().scan_daily_limit
+
+
 async def consume_scan_quota(redis: Redis, user_id: UUID) -> int:
     """Pakai satu slot kuota harian; kembalikan sisa kuota setelahnya.
 

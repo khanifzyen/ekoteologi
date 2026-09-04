@@ -163,6 +163,12 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Perbarui total poin dari respons server (mis. `points_total` hasil scan). */
+  function applyPoints(pointsTotal: number) {
+    if (user.value) user.value = { ...user.value, points: pointsTotal }
+    if (profile.value) profile.value = { ...profile.value, points: pointsTotal }
+  }
+
   function logout() {
     clearSession()
     sessionRestored.value = true
@@ -183,5 +189,6 @@ export const useAuthStore = defineStore('auth', () => {
     restoreSession,
     updateProfile,
     uploadAvatar,
+    applyPoints,
   }
 })

@@ -45,14 +45,16 @@ Salin `.env.example` → `.env`. Semua via environment, tidak ada yang hardcode.
 
 ```
 app/
-├── api/          # router: health, auth (register/login/refresh/google/me), profile, scan, audit-logs
+├── api/          # router: health, auth (register/login/refresh/google/me), profile, scan,
+│                 # scan_history (riwayat/kuota/kategori), admin_dashboard (KPI), audit-logs
 ├── core/         # config (pydantic-settings), security (bcrypt+JWT access/refresh), deps, redis
 ├── db/           # engine & session async
 ├── middleware/   # audit_log.py — pencatatan request mutating
-├── models/       # 27 tabel PRD §5 (SQLAlchemy 2.0 typed)
+├── models/       # 27 tabel PRD §5 + analytics_events (metrik, Sprint 3)
 ├── schemas/      # Pydantic request/response
 └── services/     # audit, rate_limit (login), google, llm (adapter+mock+openai-compat),
-                  # scan_cache, scan_limit, ledger (poin), quotes (bank terkurasi)
+                  # scan_cache, scan_limit, ledger (poin), quotes (bank terkurasi),
+                  # metrics (event aktivasi — Sprint 3)
 alembic/          # migrasi (template async)
 scripts/          # create_admin.py, seed.py (kategori sampah, level, badge)
 tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
@@ -71,7 +73,11 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/profile` | Bearer | Profil + `level`/`level_title` dihitung dari tabel `levels` |
 | PATCH | `/v1/profile` | Bearer | Ubah `full_name`/`city`/`avatar_url` |
 | POST | `/v1/profile/avatar` | Bearer | Multipart `file` (JPG/PNG/WebP, ≤2 MB) → simpan di `UPLOAD_DIR`, `avatar_url` relatif `/uploads/avatars/…` |
-| POST | `/v1/scan` | Bearer | Multipart `file` foto (JPG/PNG/WebP, ≤`SCAN_IMAGE_MAX_MB`) → hasil analisis LLM tervalidasi (lihat "Arsitektur Scan AI"). 400/413 foto tidak valid, 429 kuota harian habis, 503 Redis mati (fail-closed), 502 LLM gagal setelah retry+fallback |
+| POST | `/v1/scan` | Bearer | Multipart `file` foto (JPG/PNG/WebP, ≤`SCAN_IMAGE_MAX_MB`) → hasil analisis LLM tervalidasi (lihat "Arsitektur Scan AI"). 400/413 foto tidak valid, 429 kuota harian habis (+ header `Retry-After`), 503 Redis mati (fail-closed), 502 LLM gagal setelah retry+fallback |
+| GET | `/v1/scans` | Bearer | Riwayat scan milik user, terbaru dulu. Query: `category_id?`, `limit` (1–50, default 20), `offset` → `{items, total, limit, offset}` |
+| GET | `/v1/scans/categories` | — | Daftar kategori sampah (seed) utk filter chips — `{id, name, icon, base_points}` |
+| GET | `/v1/scans/quota` | Bearer | Pemakaian kuota hari ini tanpa mengkonsumsi slot → `{used, limit, remaining, resets_in_seconds}`. Redis mati → 503 (UI menyembunyikan pill kuota) |
+| GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users:{total,new_7d}, scans:{today,total}, verification:{pending}, cache:{hit,miss,hit_rate}}` (grafik & biaya LLM menyusul Sprint 4) |
 | GET | `/uploads/*` | — | File statis (avatar, foto scan) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
@@ -134,6 +140,19 @@ Mengaktifkan provider asli di staging/prod: set `LLM_MODE=live` +
 `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` (mis. base URL
 `https://open.bigmodel.cn/api/paas/v4` — API OpenAI-compatible); biaya tetap
 nol di dev karena default `mock`.
+
+### Metrik & event aktivasi (Sprint 3)
+
+- Gate metrik PRD §8 dimulai: setiap scan PERTAMA seorang user mencatat event
+  `scan_pertama` ke tabel `analytics_events` (append-only — hanya INSERT),
+  ikut transaksi scan yang sama (tidak ada event "hantu" bila request gagal).
+  Payload: `{scan_id, category, points}`; juga dilog sebagai
+  `EVENT scan_pertama user=… scan=…`.
+- `services/metrics.track_event()` adalah pintu masuk tunggal; event berikutnya
+  (`misi_selesai`, `modul_selesai`, `streak_hari`) memakai fungsi yang sama di
+  sprint masing-masing.
+- Angka penghitung cache (`scan:stats:*`) diekspos ke admin lewat
+  `GET /v1/admin/kpi` (`cache.hit_rate`) sebagai dasar metrik hit rate ≥70%.
 
 ## Middleware audit log
 

@@ -2,11 +2,14 @@
 
 export class ApiError extends Error {
   status: number
+  /** Nilai header `Retry-After` bila server mengirimnya (mis. 429 kuota scan). */
+  retryAfterSeconds: number | null
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, retryAfterSeconds: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -81,7 +84,11 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 
   if (!resp.ok) {
     const detail = (await parseDetail(resp)) ?? 'Terjadi kesalahan pada server.'
-    throw new ApiError(resp.status, detail)
+    const retryAfterHeader = resp.headers.get('Retry-After')
+    const retryAfter = retryAfterHeader !== null && /^\d+$/.test(retryAfterHeader)
+      ? Number(retryAfterHeader)
+      : null
+    throw new ApiError(resp.status, detail, retryAfter)
   }
   return (await resp.json()) as T
 }

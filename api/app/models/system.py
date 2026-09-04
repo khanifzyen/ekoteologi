@@ -38,6 +38,22 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class AnalyticsEvent(Base):
+    """Event metrik produk (PRD §8) — append-only, hanya INSERT.
+
+    Dimulai Sprint 3 dengan `scan_pertama` (aktivasi); `misi_selesai`,
+    `modul_selesai`, `streak_hari` menyusul di sprint masing-masing.
+    """
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(50), index=True)  # scan_pertama | …
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 

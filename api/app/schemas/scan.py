@@ -32,6 +32,41 @@ class ScanCategoryOut(BaseModel):
     icon: str | None = None
 
 
+class ScanCategoryFullOut(ScanCategoryOut):
+    """Kategori lengkap — daftar filter riwayat + info poin dasar."""
+
+    base_points: int
+
+
+class ScanHistoryItem(BaseModel):
+    """Satu baris riwayat scan (layar Riwayat mobile, Sprint 3)."""
+
+    id: int
+    item_name: str | None = None
+    category: ScanCategoryOut | None = None
+    points: int
+    image_url: str | None = None
+    created_at: datetime
+
+
+class ScanHistoryPage(BaseModel):
+    """Respons `GET /v1/scans` — offset pagination + total utk tombol "Muat lagi"."""
+
+    items: list[ScanHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class ScanQuotaOut(BaseModel):
+    """Respons `GET /v1/scans/quota` — batas harian utk UI scan (PRD §8 budget)."""
+
+    used: int
+    limit: int
+    remaining: int
+    resets_in_seconds: int
+
+
 class ScanResponse(BaseModel):
     """Respons `POST /v1/scan` — sheet hasil di mobile (Sprint 3) mengonsumsi ini."""
 

@@ -32,6 +32,18 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/scan',
+      name: 'scan',
+      component: () => import('@/views/ScanView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/riwayat',
+      name: 'riwayat',
+      component: () => import('@/views/HistoryView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/profil',
       name: 'profil',
       component: () => import('@/views/ProfileView.vue'),
