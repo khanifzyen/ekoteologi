@@ -29,7 +29,7 @@ Bukti cepat (kriteria demo Sprint 3):
 | Foto sama → cache + anti duplikat | ✅ scan ke-2 foto sama: `cached=true duplicate=true points=0` dalam 10 ms (vs 38 ms MISS+mock LLM); UI menampilkan chip "POIN 0" + catatan "Foto sama dengan scan hari ini — poin tidak bertambah." |
 | Kuota harian ditangani UI | ✅ `GET /v1/scans/quota` → pill "Sisa scan hari ini: 18 dari 20"; 429 (limit 2) → 429 + `Retry-After` (test) → sheet "Kuota Scan Habis" dengan estimasi reset; "Coba Lagi" pada 429 kembali ke kamera tanpa unggah sia-sia |
 | Riwayat + filter kategori | ✅ `GET /v1/scans` terbaru dulu (total=2, milik user sendiri saja), `?category_id=1` terfilter, `limit/offset` pagination; UI chips Semua + 7 kategori seed, dikelompokkan Hari ini/Kemarin |
-| CI hijau | ✅ run #7 — 5 job hijau (api, admin, mobile **termasuk vitest**, android-apk) — detail §6 |
+| CI hijau | ✅ run #8 pada `203d969` — 4/4 job hijau (api, admin, mobile **termasuk vitest**, android-apk) — detail §6 |
 
 ---
 
@@ -145,7 +145,7 @@ DB & log pada smoke E2E.
 | 429 kuota harian | test (`scan_daily_limit=2`) | ✅ 429 + `Retry-After` > 0; UI: sheet "Kuota Scan Habis" + `Coba Lagi` → kamera |
 | Redis mati (quota read) | test: stub `RedisError` | ✅ `/v1/scans/quota` 503 — UI menyembunyikan pill, scan tetap ditolak fail-closed (perilaku Sprint 2 tak berubah) |
 | APK debug | `./gradlew assembleDebug` (JDK 21 + SDK lokal) | ✅ `app-debug.apk` 5,7 MB (setelah `cap sync` dgn dist final); CI juga memproduksinya |
-| CI GitHub | run #7 | ✅ sukses — api, admin, mobile (kini termasuk vitest), android-apk (5 job) |
+| CI GitHub | run #8 (`203d969`) | ✅ sukses — api, admin, mobile (kini termasuk vitest), android-apk (4 job) |
 | Perangkat Android nyata | — | ⚠️ Belum (tidak ada perangkat terhubung) — kamera live preview hanya terverifikasi lewat implementasi API standar + fallback galeri; QA matrix vendor menunggu perangkat |
 
 ---
@@ -198,9 +198,10 @@ DB & log pada smoke E2E.
 
 ## 6. DoD Sprint 3 — Checklist
 
-- [x] CI hijau di GitHub: run #7 **success** (5 job) — api (ruff + 101 pytest + coverage
-      gate 70%), admin, mobile (**lint + vitest + build**), android-apk + artefak APK.
-      Verifikasi lokal: 101 pytest, 18 vitest, lint bersih, coverage 88%.
+- [x] CI hijau di GitHub: run #8 pada `203d969` **success** (4/4 job) — api (ruff + 101
+      pytest + coverage gate 70%), admin, mobile (**lint + vitest + build**),
+      android-apk + artefak APK. Verifikasi lokal: 101 pytest, 18 vitest, lint bersih,
+      coverage 88%.
 - [x] Unit/component test logika baru: API (riwayat/kuota/KPI/event 11 test baru),
       mobile (18 vitest — helper scan/datetime/consent + component ConsentCard).
 - [x] UI 100% dari `tokens.css` — ScanView/HistoryView/KpiCard nol hardcode warna/jarak
