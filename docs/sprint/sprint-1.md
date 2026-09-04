@@ -141,7 +141,8 @@ Bukti cepat:
 
 ## 6. DoD Sprint 1 — Checklist
 
-- [x] CI hijau (lokal setara CI; push `ba1f57c` memicu run GitHub).
+- [x] CI hijau di GitHub: run #4 pada `d627d65` **success** (api, admin, mobile,
+      android-apk + artefak APK); verifikasi lokal: 51 test, ruff/eslint/build bersih.
 - [x] Unit test logika baru (rate limit, refresh, verifikasi Google, seed, profil); 51
       test total. *Pengukuran coverage % masih menyusul Sprint 2 sesuai catatan Sprint 0.*
 - [x] UI 100% dari `tokens.css` — gaya baru di `app.css` memakai token (nol hardcode);
