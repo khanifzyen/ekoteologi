@@ -1,0 +1,125 @@
+/* ============================================================
+   EKOTEOLOGI AR — Gaya tambahan admin di luar mockup D3
+   (form login, avatar inisial, state kosong, item nav nonaktif).
+   Semua nilai memakai token — nol hardcode warna/jarak.
+   ============================================================ */
+
+/* ── Form field (selaras spesifikasi Input DESIGN.md §9) ── */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
+.label { font-size: var(--text-sm); font-weight: 700; }
+.hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+.input-wrap { position: relative; }
+.input {
+  width: 100%;
+  min-height: var(--tap-target);
+  padding: 0 var(--space-4);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+.input::placeholder { color: var(--ink-400); }
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+.input[aria-invalid="true"] { border-color: var(--color-danger); }
+.field-error { font-size: var(--text-xs); color: var(--color-danger-strong); font-weight: 600; }
+.inside-btn {
+  position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+  width: 38px; height: 38px;
+  border: none; background: transparent;
+  color: var(--color-text-muted); cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+}
+.inside-btn:hover { color: var(--color-primary); }
+
+/* ── Avatar inisial (tanpa fetch gambar eksternal) ── */
+.avatar-initials {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex: none;
+  border-radius: 50%;
+  background: var(--color-header-grad);
+  color: var(--gold-light);
+  font-family: var(--font-heading); font-weight: 700; font-size: var(--text-sm);
+}
+
+/* ── Halaman login ── */
+.auth-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-5);
+}
+.auth-card { width: 100%; max-width: 400px; }
+.auth-brand {
+  display: flex; align-items: center; gap: var(--space-3);
+  justify-content: center;
+  margin-bottom: var(--space-5);
+}
+.auth-brand .mark {
+  width: 44px; height: 44px; flex: none;
+  border-radius: var(--radius-md);
+  background: var(--color-header-grad);
+  color: var(--gold-light); font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+}
+.auth-brand h1 { font-size: var(--text-lg); }
+.auth-brand span {
+  display: block;
+  font-size: var(--text-xs); color: var(--color-text-muted);
+  font-family: var(--font-body); font-weight: 400;
+}
+.auth-foot {
+  text-align: center;
+  font-size: var(--text-xs); color: var(--color-text-muted);
+  margin-top: var(--space-4);
+}
+
+/* ── Error box & empty state (pola dari mockup mobile D1) ── */
+.error-box {
+  background: var(--color-danger-soft);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-danger-strong);
+  margin-bottom: var(--space-4);
+}
+.error-box i { font-size: 22px; margin-bottom: var(--space-2); display: block; }
+.error-box p { font-size: var(--text-sm); }
+.empty { text-align: center; padding: var(--space-6) var(--space-4); }
+.empty-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 28px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto var(--space-4);
+}
+.empty h3 { font-size: var(--text-md); margin-bottom: 6px; }
+.empty p { color: var(--color-text-muted); font-size: var(--text-sm); max-width: 46ch; margin: 0 auto; }
+.empty code {
+  font-size: var(--text-xs);
+  background: var(--surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+/* ── Item nav nonaktif (modul menyusul sprint berikutnya) ── */
+.nav a[aria-disabled="true"] { color: var(--ink-400); cursor: default; }
+.nav a[aria-disabled="true"]:hover { background: transparent; }
+
+/* ── Profil singkat dashboard ── */
+.account-row { display: flex; align-items: center; gap: var(--space-3); }
+.account-row .who { flex: 1; min-width: 0; }
+.account-row .who strong { display: block; font-size: var(--text-sm); }
+.account-row .who span { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+/* ── Tombol lebar penuh (pola dari mockup mobile D1) ── */
+.btn-block { width: 100%; }
