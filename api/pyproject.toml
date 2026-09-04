@@ -1,0 +1,45 @@
+[project]
+name = "ekoteologi-api"
+version = "0.1.0"
+description = "API Ekoteologi AR — FastAPI + PostgreSQL + Redis"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "pydantic[email]>=2.10",
+    "pydantic-settings>=2.6",
+    "pyjwt>=2.10",
+    "bcrypt>=4.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Pola standar FastAPI: Depends()/Query() di default argumen dianggap immutable.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "app.core.deps.require_roles"]
