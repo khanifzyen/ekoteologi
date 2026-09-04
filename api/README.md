@@ -90,6 +90,12 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/daily-content` | Bearer | Kartu "Kutipan Hari Ini" `beranda.html` (Sprint 6): konten terjadwal admin hari ini (`daily_contents.publish_date`) atau fallback rotasi bank quote terkurasi (`fallback: true`, tanpa `eco_action`) — selalu 200 |
 | POST | `/v1/push/token` | Bearer | Daftarkan token FCM perangkat `{token, platform?}` → `fcm_tokens` (upsert idempoten; token akun lain berpindah ke akun ini). Token <32 karakter → 400 |
 | DELETE | `/v1/push/token` | Bearer | Hapus token milik sendiri `{token}` (logout/uninstall) — idempoten |
+| GET | `/v1/modules` | Bearer | Daftar modul **tayang** (urut `order`) + progres saya per modul (`lessons_done/total`, `percent`, `is_completed`, CTA `Mulai/Lanjutkan/Ulangi`) + `summary {completed,total}` utk chip header "N/M modul" |
+| GET | `/v1/modules/{id}` | Bearer | Detail modul: daftar pelajaran (flag `done`), intro kuis (`question_count`, `pass_percent`, `points`, bank soal **tanpa kunci jawaban**), `quiz_best` (hasil kuis terbaik saya) |
+| GET | `/v1/lessons/{id}` | Bearer | Satu pelajaran: blok konten JSONB (`paragraph` / `quote` arab+terjemah+sumber / `tip`) + `next_lesson_id` utk CTA lanjut |
+| POST | `/v1/lessons/{id}/complete` | Bearer | Tandai pelajaran selesai — progres berurutan `lessons_done = max(order+1)` (baca ulang tidak menurunkan). Pelajaran terakhir = modul tuntas → event `modul_selesai` + streak + evaluasi lencana (sekali, idempoten). Tanpa poin — poin hanya kuis |
+| GET | `/v1/modules/{id}/quiz` | Bearer | Intro kuis + bank soal tanpa kunci jawaban. 404 bila modul belum punya kuis/soal |
+| POST | `/v1/modules/{id}/quiz` | Bearer | Kirim `{answers: [{question_id, choice}]}` → **penilaian otomatis server**: `{score, total, percent, passed, points_awarded, points_total, already_passed_before, message, review[]}` (kunci + penjelasan terbuka SETELAH submit). Lulus → poin `QUIZ_POINTS` lewat ledger **sekali per modul** (kuis ulang = 0 poin), notifikasi, event `modul_selesai`, streak, badge engine on-event. Gagal → attempt tersimpan tanpa poin |
 | GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users, scans, verification:{pending}, cache:{hit,miss,hit_rate}, llm:{cost_month, tokens_month, budget_monthly}}` — biaya LLM = token bulan berjalan (scan non-cache) × `LLM_COST_PER_1K_TOKENS` |
 | GET | `/v1/admin/charts` | Bearer panel | Data 2 chart dashboard: `daily` (scan/hari `days`=7–30, default 14, hari kosong = 0) & `categories` (7 hari, terbanyak dulu, persentase) |
 | GET | `/v1/admin/missions` | Bearer panel | Daftar misi + rekap klaim (`claims_total`, `claims_pending`). Query: `is_active?`, `verification?`, `q?` (judul), `limit` (1–100), `offset` |
@@ -103,6 +109,18 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | POST | `/v1/admin/contents` | Bearer admin·editor | Jadwalkan konten harian `{publish_date, type: ayat\|hadis\|refleksi, body, title?, source?, eco_action?, image_url?}` → 201. `publish_date` UNIQUE → 409 bila tanggal sudah terisi |
 | PATCH | `/v1/admin/contents/{id}` | Bearer admin·editor | Ubah isi / geser jadwal (deteksi bentrok tanggal → 409) |
 | DELETE | `/v1/admin/contents/{id}` | Bearer admin | Hapus konten |
+| GET | `/v1/admin/modules` | Bearer panel | Daftar SEMUA modul (termasuk draft) + rekap `lesson_count`/`question_count` |
+| POST | `/v1/admin/modules` | Bearer admin·editor | Buat modul `{title, slug?, description?, cover_url?, order, is_published}` → 201; slug kosong = otomatis dari judul (bentrok → suffix `-2`); slug eksplisit bentrok → 409 |
+| PATCH | `/v1/admin/modules/{id}` | Bearer admin·editor | Ubah sebagian field modul (judul/slug/deskripsi/ikon/urutan/tayang) |
+| DELETE | `/v1/admin/modules/{id}` | Bearer admin | Hapus modul; **409 bila sudah ada progres/attempt pengguna** (riwayat belajar terjaga — nonaktifkan saja) |
+| GET | `/v1/admin/modules/{id}/lessons` | Bearer panel | Pelajaran modul (urut) dgn blok penuh — bahan editor admin |
+| POST | `/v1/admin/modules/{id}/lessons` | Bearer admin·editor | Tambah pelajaran `{title, blocks[], order?}` — blok JSONB tervalidasi (`paragraph`/`quote`/`tip`; blok invalid → 400 dgn pesan blok ke-N) |
+| PATCH | `/v1/admin/lessons/{id}` | Bearer admin·editor | Ubah judul/blok/urutan pelajaran |
+| DELETE | `/v1/admin/lessons/{id}` | Bearer admin | Hapus pelajaran |
+| GET | `/v1/admin/modules/{id}/questions` | Bearer panel | Bank soal modul (kunci jawaban ikut — panel admin) |
+| POST | `/v1/admin/modules/{id}/questions` | Bearer admin·editor | Tambah soal `{question, options[2–6], answer, explanation?, order?}` → kuis per modul dibuat otomatis saat soal pertama; opsi <2 atau kunci di luar jangkauan → 400 |
+| PATCH | `/v1/admin/questions/{id}` | Bearer admin·editor | Ubah soal/opsi/kunci/penjelasan/urutan |
+| DELETE | `/v1/admin/questions/{id}` | Bearer admin | Hapus soal |
 | GET | `/uploads/*` | — | File statis (avatar, foto scan, bukti misi) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
@@ -263,6 +281,28 @@ nol di dev karena default `mock`.
   `level_progress` (%) — bahan kartu "Pohon Kebaikanmu" beranda & layar
   profil (tahap pohon dihitung di klien dari angka server).
 
+## E-Learning & konten harian (Sprint 7)
+
+- **Modul → pelajaran → kuis** (PRD §5.5/§2.4): blok konten pelajaran berbentuk
+  JSONB tervalidasi `normalize_blocks()` — `paragraph {text}`, `quote
+  {text, arabic?, source?}`, `tip {text}` (mockup `elearning.html`).
+- **Progres berurutan**: `user_module_progress.lessons_done = max(tercatat,
+  order+1)`; bar progres kartu modul = persen dari total pelajaran. Pelajaran
+  terakhir → `is_completed` + event `modul_selesai` (source=pelajaran) +
+  streak + badge engine (sekali — transisi idempoten).
+- **Kuis otomatis + anti dobel poin**: kunci jawaban tidak pernah dikirim
+  sebelum submit. Lulus (persen ≥ `QUIZ_PASS_PERCENT`) → attempt `passed=true`
+  + poin `QUIZ_POINTS` via `award_points(source="quiz")` **sekali per modul**
+  (lulus ulang tercatat tapi 0 poin), notifikasi "Poin kuis masuk", event
+  `modul_selesai` (source=kuis), streak, dan `sync_user_badges` on-event
+  (lencana kriteria `quiz_passed` — mis. "Cendekiawan Hijau" — terbuka
+  otomatis). Gagal → attempt tersimpan (riwayat) tanpa poin.
+- **Konten harian mobile**: layar Belajar menampilkan kartu "Refleksi Hari
+  Ini" dari endpoint yang sama dgn beranda (`GET /v1/daily-content`) — satu
+  sumber (jadwal admin atau fallback bank quote), tanpa duplikasi.
+- **Env baru**: `QUIZ_PASS_PERCENT` (70), `QUIZ_POINTS` (20) — ambang &
+  hadiah bisa diubah PO tanpa deploy.
+
 ## Middleware audit log
 
 - Mencatat POST/PUT/PATCH/DELETE (kecuali `/health` dan seluruh `/v1/auth/*` —
@@ -275,9 +315,13 @@ nol di dev karena default `mock`.
 `uv run python -m scripts.seed` (idempoten): 7 `waste_categories`
 (Organik, Plastik, Kertas, Kaca, Logam, B3, Residu — dgn icon & `base_points`),
 10 `levels` (0 → 2.300 poin: Pemula s.d. Teladan Ekoteologi), 10 `badges`
-(kriteria JSONB `{"type","value"}` — dievaluasi badge engine Sprint 6), dan
-5 `missions` contoh (photo ×2, manual ×2, auto_scan ×1 — Sprint 4; admin bisa
-mengelola lewat CRUD `/v1/admin/missions`).
+(kriteria JSONB `{"type","value"}` — dievaluasi badge engine Sprint 6), 5
+`missions` contoh (photo ×2, manual ×2, auto_scan ×1 — Sprint 4; admin bisa
+mengelola lewat CRUD `/v1/admin/missions`), dan 3 modul e-learning contoh
+(Sprint 7, mengikuti mockup `elearning.html`): "Eko-Iman: Dasar Ekoteologi",
+"Fiqih Sampah Sehari-hari", dan "Hemat Air, Amal Terjaga" — lengkap pelajaran
+(blok paragraph/quote/tip) + bank soal kuis agar demo belajar → kuis → poin
+jalan end-to-end. Idempoten per slug/judul pelajaran/teks soal.
 ## Test
 
 ```bash

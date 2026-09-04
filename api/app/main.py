@@ -11,12 +11,14 @@ from fastapi.staticfiles import StaticFiles
 from app.api import (
     admin_contents,
     admin_dashboard,
+    admin_elearning,
     admin_missions,
     admin_users,
     admin_verification,
     audit,
     auth,
     content,
+    elearning,
     health,
     leaderboard,
     missions,
@@ -61,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(scan.router)
     app.include_router(scan_history.router)
     app.include_router(missions.router)
+    app.include_router(elearning.router)
     app.include_router(streak.router)
     app.include_router(leaderboard.router)
     app.include_router(notifications.router)
@@ -69,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_missions.router)
     app.include_router(admin_verification.router)
     app.include_router(admin_contents.router)
+    app.include_router(admin_elearning.router)
     app.include_router(admin_users.router)
     app.include_router(admin_dashboard.router)
     app.include_router(audit.router)

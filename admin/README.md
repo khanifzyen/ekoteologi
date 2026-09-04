@@ -81,13 +81,38 @@ melihat):
   confirm + audit log). State lengkap: skeleton, error + Coba Lagi, empty
   ("Belum ada konten terjadwal…").
 
+## Modul E-Learning (Sprint 7)
+
+**`ModulesView` (`/e-learning`)** — CRUD modul + editor blok pelajaran (JSONB)
++ bank soal kuis sesuai story "Admin: CRUD modul + editor blok lesson (JSONB)
++ bank soal" (`mobile/elearning.html` sebagai acuan bentuk blok):
+
+- **Tabel modul**: judul + slug + ikon (FontAwesome/URL), rekap pelajaran &
+  soal, urutan, badge **Tayang/Draft**; aksi Kelola / Ubah / Hapus (admin,
+  confirm + audit log; server menolak 409 bila modul sudah dikerjakan
+  pengguna — jaga riwayat).
+- **Form modul**: judul (slug otomatis dipratinjau), deskripsi, ikon
+  (`fa-leaf` dsb. atau URL gambar), urutan, centang tayang.
+- **Panel Kelola** per modul, dua kolom:
+  - *Pelajaran* — daftar urut dgn ringkasan blok ("2 paragraf · 1 kutipan"),
+    tambah/ubah/hapus. Editor blok: tambah blok **Paragraf/Kutipan/Tip**,
+    tiap blok bisa naik/turun/hapus; kutipan punya field teks Arab (RTL),
+    terjemahan, dan sumber. Validasi klien + server (blok invalid → 400
+    pesan blok ke-N).
+  - *Bank Soal* — daftar soal dgn kunci jawaban; form soal: pertanyaan,
+    4 pilihan (minimal 2 terisi) + radio kunci jawaban, penjelasan yang
+    tampil di bedah jawaban setelah kuis. Kuis per modul dibuat otomatis
+    saat soal pertama ditambahkan.
+- Role: tulis admin·editor; hapus admin. Logika editor diekstrak ke
+  `utils/elearning.ts` (murni, 11 test vitest).
+
 ## Perintah
 
 ```bash
 npm ci
 npm run dev        # http://localhost:5174
 npm run lint       # eslint (flat config)
-npm run test       # vitest (util chart + util verifikasi)
+npm run test       # vitest (util chart + util verifikasi + util e-learning)
 npm run build      # vue-tsc (typecheck) + vite build
 ```
 

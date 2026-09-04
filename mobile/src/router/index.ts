@@ -50,6 +50,36 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/belajar',
+      name: 'belajar',
+      component: () => import('@/views/Elearning/ModuleListView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/belajar/pelajaran/:lessonId',
+      name: 'pelajaran',
+      component: () => import('@/views/Elearning/LessonView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/belajar/modul/:moduleId/kuis',
+      name: 'kuis',
+      component: () => import('@/views/Elearning/QuizView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/belajar/modul/:moduleId/hasil',
+      name: 'kuis-hasil',
+      component: () => import('@/views/Elearning/ResultView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/belajar/modul/:moduleId',
+      name: 'modul',
+      component: () => import('@/views/Elearning/ModuleDetailView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/profil',
       name: 'profil',
       component: () => import('@/views/ProfileView.vue'),

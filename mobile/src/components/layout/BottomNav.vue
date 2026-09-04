@@ -1,22 +1,19 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
-import { useToastStore } from '@/stores/toast'
-
 const props = defineProps<{
   /** Tab aktif: home | misi | belajar | profil. */
   active: 'home' | 'misi' | 'belajar' | 'profil'
 }>()
 
 const router = useRouter()
-const toast = useToastStore()
 
-// Layar tujuan dibangun bertahap (implementation-plan Sprint 4–7).
+// Layar tujuan (beranda/misi/profil hidup Sprint 4–6; belajar Sprint 7).
 const items = [
-  { key: 'home', label: 'Beranda', icon: 'fa-house', to: 'home', sprint: null },
-  { key: 'misi', label: 'Misi', icon: 'fa-bullseye', to: 'misi', sprint: null },
-  { key: 'belajar', label: 'Belajar', icon: 'fa-book-open', to: null, sprint: 'Sprint 7' },
-  { key: 'profil', label: 'Profil', icon: 'fa-user', to: 'profil', sprint: null },
+  { key: 'home', label: 'Beranda', icon: 'fa-house', to: 'home' },
+  { key: 'misi', label: 'Misi', icon: 'fa-bullseye', to: 'misi' },
+  { key: 'belajar', label: 'Belajar', icon: 'fa-book-open', to: 'belajar' },
+  { key: 'profil', label: 'Profil', icon: 'fa-user', to: 'profil' },
 ] as const
 
 // FAB kamera → layar scan (Sprint 3 — fitur signature).
@@ -26,11 +23,7 @@ function onFab() {
 
 function onItem(item: (typeof items)[number]) {
   if (item.key === props.active) return
-  if (item.to) {
-    void router.push({ name: item.to })
-    return
-  }
-  toast.show(`Layar ${item.label} menyusul di ${item.sprint ?? 'sprint berikutnya'}.`)
+  void router.push({ name: item.to })
 }
 </script>
 

@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     llm_cost_per_1k_tokens: float = 0.0
     llm_budget_monthly: float = 0.0
 
+    # ── E-Learning (Sprint 7) ──
+    # Ambang kelulusan kuis (%) dan hadiah poin sekali per modul (mockup
+    # `elearning.html`: "5 soal · lulus 70% · hadiah +20 poin"). Kuis yang
+    # diulang dan lulus lagi TIDAK membawa poin baru (anti dobel poin).
+    quiz_pass_percent: int = 70
+    quiz_points: int = 20
+
     # ── Push FCM (Sprint 6) ──
     # `push_mode=log` (default): push dicatat di log — tanpa kredensial (dev/test).
     # `push_mode=fcm`: kirim via FCM HTTP v1 — wajib file kredensial service

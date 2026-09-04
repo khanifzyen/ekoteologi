@@ -171,6 +171,43 @@ dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
   FCM butuh build native; pengiriman pesan nyata menunggu kredensial server
   (item terbuka Sprint 6).
 
+## Sprint 7 — E-Learning, konten harian (refleksi), polish onboarding
+
+- **Layar Belajar** (`ModuleListView.vue`, rute `/belajar`, tab bottom-nav
+  "Belajar" kini aktif — bukan lagi "Segera hadir"): header dgn chip
+  "N/M modul" dari ringkasan server, kartu **"Refleksi Hari Ini"**
+  (WisdomCard dgn label prop — endpoint `GET /v1/daily-content` yang sama
+  dgn beranda: satu sumber, tanpa duplikasi), dan daftar kartu modul
+  (`module-card` mockup `elearning.html`): ikon, hitungan "N pelajaran ·
+  kuis", bar progres (progressbar ARIA), label persen
+  (Baru/N%/Selesai — `utils/elearning.ts` teruji), dan CTA server-driven
+  (Mulai/Lanjutkan/Ulangi). State skeleton/empty/error + Coba Lagi.
+- **Detail modul** (`ModuleDetailView.vue`, `/belajar/modul/:id`): ringkasan
+  progres + CTA, daftar pelajaran (centang hijau yg selesai, seluruh baris
+  tap target), kartu **Kuis Modul** (jumlah soal · ambang · hadiah poin +
+  hasil terbaik saya), dan pesan jujur bila kuis belum disiapkan.
+- **Pelajaran** (`LessonView.vue`, `/belajar/pelajaran/:id`): render blok
+  JSONB sesuai mockup — paragraf, **kutipan** (teks Arab RTL + terjemahan +
+  sumber, font arab), **tip** (kartu emas dgn lampu). "Tandai Selesai &
+  Lanjut" → `POST /v1/lessons/{id}/complete` (progres berurutan server);
+  pelajaran terakhir yang menuntaskan modul melompat ke kuis; "Lompat ke
+  Kuis Modul" selalu tersedia.
+- **Kuis** (`QuizView.vue`, `/belajar/modul/:id/kuis`): intro ("N soal ·
+  lulus 70% · hadiah +20 poin" — angka server) → satu soal per layar dgn
+  titik progres + validasi "pilih salah satu jawaban dulu" → kirim semua
+  jawaban → penilaian otomatis server (kunci tidak pernah bocor sebelum
+  submit). Poin lulus disinkronkan ke header (auth store).
+- **Hasil** (`ResultView.vue`, `/belajar/modul/:id/hasil`): ring
+  conic-gradient dgn skor (mockup `.ring`), judul "MasyaAllah, Lulus!",
+  baris poin (+N / sudah pernah / ajakan coba lagi), **Bedah Jawaban**
+  (kunci + penjelasan server, teks opsi dari snapshot kuis), tombol kembali.
+  Hasil diteruskan via store memori `stores/quizResult.ts` — refresh di
+  layar hasil kembali ke intro kuis (disengaja, hasil tidak dibuat-buat).
+- **Onboarding + splash final** (`OnboardingView.vue`): splash kini menunggu
+  font siap (`document.fonts.ready`, cap 2,5 dtk) + durasi minimum — tanpa
+  FOUT saat slide tampil; navigasi geser (swipe ≥48px) & tombol panah
+  keyboard; perpindahan slide diumumkan `aria-live=polite`.
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.

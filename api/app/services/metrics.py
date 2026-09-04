@@ -18,7 +18,13 @@ from app.models import AnalyticsEvent
 EVENT_SCAN_PERTAMA = "scan_pertama"
 EVENT_MISI_SELESAI = "misi_selesai"
 EVENT_STREAK_HARI = "streak_hari"
-KNOWN_EVENTS = {EVENT_SCAN_PERTAMA, EVENT_MISI_SELESAI, EVENT_STREAK_HARI}
+EVENT_MODUL_SELESAI = "modul_selesai"
+KNOWN_EVENTS = {
+    EVENT_SCAN_PERTAMA,
+    EVENT_MISI_SELESAI,
+    EVENT_STREAK_HARI,
+    EVENT_MODUL_SELESAI,
+}
 
 
 async def track_event(

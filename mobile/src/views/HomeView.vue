@@ -353,14 +353,14 @@ onMounted(async () => {
       <button
         class="menu-card"
         type="button"
-        @click="toast.show('E-Learning menyusul di Sprint 7.')"
+        @click="router.push({ name: 'belajar' })"
       >
         <i
           class="fas fa-book-open"
           aria-hidden="true"
         />
         <strong>E-Learning</strong>
-        <span>Segera hadir</span>
+        <span>Modul + kuis · dapatkan poin</span>
       </button>
       <button
         class="menu-card"

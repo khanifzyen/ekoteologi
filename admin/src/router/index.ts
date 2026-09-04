@@ -40,6 +40,11 @@ const router = createRouter({
           name: 'contents',
           component: () => import('@/views/ContentsView.vue'),
         },
+        {
+          path: 'e-learning',
+          name: 'modules',
+          component: () => import('@/views/ModulesView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },

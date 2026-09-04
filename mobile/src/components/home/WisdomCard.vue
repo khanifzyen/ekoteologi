@@ -4,13 +4,17 @@
  * label, kutipan (font arab), sumber, dan baris "Aksi hari ini" + tombol
  * Bagikan (Web Share API bila ada — tap target 44px). Konten dari
  * `GET /v1/daily-content` (terjadwal admin atau fallback bank quote server).
+ * Sprint 7: label kini prop — `beranda.html` "Kutipan Hari Ini",
+ * `elearning.html` "Refleksi Hari Ini" (sumber data sama — satu endpoint).
  */
 import { computed } from 'vue'
 
 import type { DailyContent } from '@/types/daily'
 import { canShare, contentTypeLabel, wisdomShareText } from '@/utils/daily'
 
-const props = defineProps<{ content: DailyContent }>()
+const props = withDefaults(defineProps<{ content: DailyContent; label?: string }>(), {
+  label: 'Kutipan Hari Ini',
+})
 const emit = defineEmits<{ share: [text: string] }>()
 
 const typeLabel = computed(() => contentTypeLabel(props.content.type))
@@ -19,7 +23,7 @@ const shareText = computed(() => wisdomShareText(props.content))
 function onShare() {
   if (canShare()) {
     void navigator
-      .share({ title: 'Kutipan Hari Ini — Ekoteologi AR', text: shareText.value })
+      .share({ title: `${props.label} — Ekoteologi AR`, text: shareText.value })
       .catch(() => {
         /* dibatalkan pengguna — bukan galat */
       })
@@ -32,7 +36,7 @@ function onShare() {
 <template>
   <div class="card wisdom">
     <div class="wisdom-label">
-      Kutipan Hari Ini
+      {{ label }}
     </div>
     <span
       class="chip chip-green wisdom-type"

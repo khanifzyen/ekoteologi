@@ -34,7 +34,7 @@ const mainNav: NavItem[] = [
   { label: 'Verifikasi Misi', icon: 'fa-clipboard-check', to: '/verifikasi' }, // Sprint 5
   { label: 'Misi', icon: 'fa-bullseye', to: '/misi' }, // Sprint 4
   { label: 'Konten Harian', icon: 'fa-calendar-day', to: '/konten' }, // Sprint 6
-  { label: 'E-Learning', icon: 'fa-book-open' }, // Sprint 7
+  { label: 'E-Learning', icon: 'fa-book-open', to: '/e-learning' }, // Sprint 7
 ]
 const systemNav: NavItem[] = [
   { label: 'Push Notifikasi', icon: 'fa-bell' }, // Sprint 8

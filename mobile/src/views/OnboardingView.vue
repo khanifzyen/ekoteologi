@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+/**
+ * Splash & onboarding (Sprint 1, polish final Sprint 7) — 1:1 mockup
+ * `onboarding.html`. Polish final: (1) splash menunggu font siap
+ * (`document.fonts.ready` dgn batas waktu — mencegah FOUT di slide berikut)
+ * + durasi minimum; (2) navigasi geser (swipe) antar slide; (3) tombol
+ * panah keyboard utk aksesibilitas; (4) pengumuman slide via aria-live.
+ */
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useToastStore } from '@/stores/toast'
@@ -7,11 +14,35 @@ import { useToastStore } from '@/stores/toast'
 const router = useRouter()
 const toast = useToastStore()
 
-/** State awal splash lalu pindah sendiri ke slide onboarding (mockup onboarding.html). */
-const SPLASH_MS = 1600
+/**
+ * Splash tampil minimal MIN_SPLASH_MS dan maksimal sampai font siap
+ * (cap MAX_FONT_WAIT_MS — jangan pernah menggantung user; reduced-motion
+ * dihormati tokens.css sehingga loader memang statis).
+ */
+const MIN_SPLASH_MS = 1200
+const MAX_FONT_WAIT_MS = 2500
 const splash = ref(true)
+
+function hideSplash() {
+  splash.value = false
+}
+
 onMounted(() => {
-  window.setTimeout(() => (splash.value = false), SPLASH_MS)
+  const minDelay = new Promise<void>((resolve) => window.setTimeout(resolve, MIN_SPLASH_MS))
+  const fontsReady: Promise<void> =
+    typeof document !== 'undefined' && 'fonts' in document
+      ? Promise.race([
+          document.fonts.ready.then(() => undefined),
+          new Promise<void>((resolve) => window.setTimeout(resolve, MAX_FONT_WAIT_MS)),
+        ])
+      : Promise.resolve()
+  Promise.all([minDelay, fontsReady]).then(hideSplash)
+
+  window.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
 })
 
 const slides = [
@@ -52,6 +83,25 @@ function next() {
 
 function prev() {
   if (current.value > 0) current.value -= 1
+}
+
+/** Swipe antar slide (≥48px horizontal — tidak mengganggu scroll vertikal). */
+let touchStartX = 0
+function onTouchStart(event: TouchEvent) {
+  touchStartX = event.changedTouches[0]?.clientX ?? 0
+}
+function onTouchEnd(event: TouchEvent) {
+  const deltaX = (event.changedTouches[0]?.clientX ?? 0) - touchStartX
+  if (Math.abs(deltaX) < 48) return
+  if (deltaX < 0) next()
+  else prev()
+}
+
+/** Arrow keyboard — akselerator; tombol tetap jalan untuk screen reader. */
+function onKeydown(event: KeyboardEvent) {
+  if (splash.value) return
+  if (event.key === 'ArrowRight') next()
+  else if (event.key === 'ArrowLeft') prev()
 }
 
 function finish() {
@@ -113,7 +163,11 @@ function skip() {
       />
     </button>
 
-    <div class="ob-body">
+    <div
+      class="ob-body"
+      @touchstart.passive="onTouchStart"
+      @touchend.passive="onTouchEnd"
+    >
       <div
         :key="current"
         class="ob-slide"
@@ -145,6 +199,13 @@ function skip() {
         <h1>{{ slides[current].title }} <em>{{ slides[current].titleEm }}</em></h1>
         <p>{{ slides[current].text }}</p>
       </div>
+      <!-- Pengumuman perpindahan slide utk pembaca layar (polite). -->
+      <p
+        class="sr-only"
+        aria-live="polite"
+      >
+        Langkah {{ current + 1 }} dari {{ slides.length }}
+      </p>
     </div>
 
     <div
