@@ -1,0 +1,35 @@
+# ── Umum ──
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# ── Node ──
+node_modules/
+dist/
+coverage/
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# ── Android (Capacitor) ──
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/app/src/main/assets/capacitor.config.json
+mobile/android/app/src/main/assets/public/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# ── Editor ──
+.idea/
+.vscode/
