@@ -22,7 +22,7 @@ Bukti cepat (kriteria demo Sprint 2):
 | Curl/HTTP file → respons JSON valid | ✅ `curl -F file=@foto.png` → 200 dengan `{item_name, category, advice, quote, points, points_total, cached, duplicate, image_url, created_at}` |
 | Mock mode terbukti di log | ✅ `INFO:ekoteologi.scan: SCAN cache MISS digest=ad6574a98803 — memanggil LLM (mode=mock)` + `SCAN OK … item='Popok sekali pakai' category=Residu points=2` |
 | Cache terbukti di log | ✅ Foto sama → `SCAN cache HIT digest=ad6574a98803` tanpa panggilan LLM; kuota harian teruji: scan ke-3 (limit 2) → 429 "Kuota scan harian habis…" |
-| CI hijau | ⏳ Verifikasi CI GitHub dicatat pasca-push — hasil akhir di §6 |
+| CI hijau | ✅ Run #6 sukses (4/4 job, termasuk gate coverage api ≥70%) — detail §6 |
 
 ---
 
@@ -98,7 +98,7 @@ Bukti cepat (kriteria demo Sprint 2):
 | LLM gagal | test: provider di-stub `LLMError` | ✅ 502, tidak ada baris `scans`/ledger/poin |
 | Provider live (tanpa jaringan) | `httpx.MockTransport`: sukses, retry, fallback, gagal total | ✅ 7 skenario termasuk `attempts`/`fallback_used` di `llm_meta` |
 | Regresi Sprint 0–1 | suite penuh | ✅ 51 test lama tetap hijau |
-| CI GitHub | run pada push `aca8c82` — hasil dicatat di §6 | ⏳ dipantau pasca-push |
+| CI GitHub | run #6 (`164268f`) — api: ruff + 89 pytest + coverage gate 70% | ✅ sukses (api + admin + mobile + apk) |
 
 ---
 
@@ -144,8 +144,9 @@ Bukti cepat (kriteria demo Sprint 2):
 
 ## 6. DoD Sprint 2 — Checklist
 
-- [ ] CI hijau di GitHub — dipantau pasca-push (lokal sudah hijau: 89 test, ruff bersih,
-      coverage 88% ≥ gate 70%); hasil akhir dicatat pada commit "catat hasil run CI".
+- [x] CI hijau di GitHub: run #6 pada `164268f` **success** (4/4 job) — api (ruff + pytest +
+      coverage gate ≥70%), admin, mobile, android-apk. Verifikasi lokal: 89 test, ruff bersih,
+      coverage 88%.
 - [x] Unit test logika baru: adapter LLM (mock deterministik, parser, retry/fallback live via
       MockTransport), ledger (append-only + rekonsiliasi), cache hit/miss, kuota harian +
       fail-closed, guard duplikat, endpoint end-to-end dgn mock mode. Total 89 test.
