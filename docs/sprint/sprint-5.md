@@ -153,7 +153,7 @@ Bukti cepat (kriteria demo Sprint 5):
 | Anti dobel & resubmission | test | ✅ klaim dobel manual/photo → 409; baris rejected dipakai ulang saat unggah ulang (tetap 1 baris) |
 | Streak bonus kelipatan | test: 5 hari → touch ke-6 | ✅ bonus 20 lewat ledger `streak` + notif + event `streak_hari`; touch kedua hari sama idempoten |
 | Auto_scan filter kategori | test (byte PNG dipetakan deterministik ke kategori mock) | ✅ Organik/Residu tidak menghitung; 2× Plastik → approved |
-| CI GitHub | run #12 (`b454c44`) | ✅ sukses — api, admin, mobile, android-apk (4/4 job) |
+| CI GitHub | run #12 (`b454c44`, commit fitur) & run #13 (`6b83f42`, commit laporan) | ✅ sukses keduanya — api, admin (lint+vitest+build), mobile (lint+vitest+build), android-apk (4/4 job) |
 | Verifikasi browser interaktif & perangkat Android nyata | — | ⚠️ Belum di sesi ini (tool browser & perangkat tidak tersedia — item terbuka sejak Sprint 0); UI ditutup unit/component test + typecheck + build; smoke E2E menutup alur di tingkat API |
 
 ---
@@ -223,8 +223,9 @@ Bukti cepat (kriteria demo Sprint 5):
 
 - [x] CI hijau di GitHub: run #12 pada `b454c44` **success** (4/4 job) — api (ruff +
       175 pytest + coverage gate 70%), admin (lint + vitest + build), mobile (lint +
-      vitest + build), android-apk + artefak APK. Verifikasi lokal: 175 pytest
-      (coverage 82,04%), 49+14 vitest, lint bersih, build ketiga app + APK debug.
+      vitest + build), android-apk + artefak APK; run #13 pada `6b83f42` (laporan)
+      **success** juga. Verifikasi lokal: 175 pytest (coverage 82,04%), 49+14 vitest,
+      lint bersih, build ketiga app + APK debug.
 - [x] Unit/component test logika baru: API 41 test baru (review approve/reject +
       role + idempoten, streak engine/integrasi/bonus, level engine, klaim manual,
       auto_scan + filter kategori, notifikasi), mobile +9 (streak util + kartu
