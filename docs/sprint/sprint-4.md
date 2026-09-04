@@ -29,7 +29,7 @@ Bukti cepat (kriteria demo Sprint 4):
 | Consent di layar unggah (PRD §9) | ✅ Kartu `ConsentCard` reusable (Sprint 3) dipakai ulang; klaim tanpa consent → 400 "Persetujuan penggunaan foto wajib diberikan…"; waktu persetujuan tercatat di kolom baru `user_missions.consent_at` (keputusan §2.1 #6 — §5.2) |
 | Anti dobel klaim + periode | ✅ klaim ke-2 → 409 "Kamu sudah mengklaim misi ini…", baris tetap 1 (constraint `uq_user_missions_claim`); race dua klaim serentak ditangani `IntegrityError` (test) |
 | Dashboard 2 chart + biaya LLM | ✅ `GET /v1/admin/charts`: 14 titik harian (hari kosong = 0) + kategori % (7 hari); kartu Biaya LLM = token scan non-cache bulan berjalan × env (mock mode = Rp0); cache hit rate pindah ke kaki chart |
-| CI hijau | ✅ dicatat pada commit catatan CI — detail §6 |
+| CI hijau | ✅ run #10 pada `178bda1` — 4/4 job hijau (api, admin **kini termasuk vitest**, mobile, android-apk) — detail §6 |
 
 ---
 
@@ -140,7 +140,7 @@ Bukti cepat (kriteria demo Sprint 4):
 | Klaim ulang setelah ditolak | test: reject (simulasi Sprint 5) → klaim lagi | ✅ baris sama di-reset ke `pending`, catatan review dibersihkan, bukti lama diganti |
 | Biaya LLM | test: baris asli 500 token + baris cache 999 token | ✅ `tokens_month`=500 (cache tidak dobel hitung); rumus `2000/1000 × 1200 = 2400` teruji via override env |
 | Chart dari data nyata | test + smoke: 1 scan → 14 titik (13 nol + 1), kategori 100% | ✅ hari kosong = 0; zona waktu bucket konsisten server |
-| CI GitHub | run pada commit laporan | ✅ dicatat di commit `docs(sprint): catat hasil run CI sprint 4` — detail §6 |
+| CI GitHub | run #10 (`178bda1`) | ✅ sukses — api, admin (lint+vitest+build), mobile, android-apk (4/4 job) |
 | Verifikasi browser interaktif & perangkat Android nyata | — | ⚠️ Belum di sesi ini (tool browser & perangkat tidak tersedia) — UI ditutup unit/component test + typecheck + build; smoke E2E memverifikasi seluruh alur di tingkat API. Tinjauan visual Chrome/Firefox + demo perangkat menyusul (§7) |
 
 ---
@@ -205,10 +205,10 @@ Bukti cepat (kriteria demo Sprint 4):
 
 ## 6. DoD Sprint 4 — Checklist
 
-- [x] CI hijau di GitHub: (dicatat pada commit catatan CI) — api (ruff + 134 pytest +
-      coverage gate 70%), admin (lint + **vitest** + build), mobile (lint + vitest +
-      build), android-apk + artefak APK. Verifikasi lokal: 134 pytest (coverage 84,6%),
-      40+8 vitest, lint bersih, build ketiga app + APK debug sukses.
+- [x] CI hijau di GitHub: run #10 pada `178bda1` **success** (4/4 job) — api (ruff + 134
+      pytest + coverage gate 70%), admin (lint + **vitest** + build), mobile (lint +
+      vitest + build), android-apk + artefak APK. Verifikasi lokal: 134 pytest (coverage
+      84,6%), 40+8 vitest, lint bersih, build ketiga app + APK debug sukses.
 - [x] Unit/component test logika baru: API 33 test baru (periode, klaim + anti dobel +
       consent, CRUD, users, chart, biaya LLM), mobile 22 (helper misi + MissionCard),
       admin 8 (util chart).
