@@ -108,11 +108,34 @@ progressbar ber-ARIA) + chip "N misi baru", dan dua tab:
 Alur klaim photo: tombol Unggah Bukti → **consent foto** (kartu reusable
 `ConsentCard`, PRD §9) → pilih Kamera (`input capture=environment`) atau Galeri
 (tanpa plugin native) → pratinjau → Kirim Bukti → `POST /v1/missions/{id}/claim`
-(klaim masuk antrian `pending`, consent tercatat server). Klaim manual &
-auto_scan menyusul Sprint 5 — tombolnya memberi pesan jelas. Error klaim
+(klaim masuk antrian `pending`, consent tercatat server). Error klaim
 dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
-0 luring — foto tetap tersimpan utk kirim ulang). Poin baru masuk saat approve
-(Sprint 5), bukan saat klaim.
+0 luring — foto tetap tersimpan utk kirim ulang).
+
+## Sprint 5 — verifikasi, misi manual/auto_scan, streak, notif in-app
+
+- **Loop misi tertutup**: chip status kartu (`MissionCard`) kini hidup —
+  "Menunggu verifikasi admin" → "Selesai · +N poin" atau "Perlu diperbaiki"
+  (dengan catatan admin) setelah verifier memutuskan di panel admin. Hasil
+  verifikasi juga masuk **notifikasi in-app** (`GET /v1/notifications`);
+  begitu daftar misi dibuka, notifikasi `mission` ditandai dibaca, dan
+  kartu menu **Misi** di beranda menampilkan "N hasil verifikasi baru"
+  selama ada yang belum dibaca. (Push FCM menyusul Sprint 6.)
+- **Klaim manual**: tombol **Klaim Poin** (misi verification `manual`) langsung
+  memanggil endpoint klaim → auto-approve → toast "+N poin langsung masuk";
+  poin tersinkron ke header (`auth.addPoints` + profil disegarkan agar level
+  ikut). Tombol menampilkan spinner per-kartu saat mengirim.
+- **Misi auto_scan**: progres (`progress_count`) kini diisi otomatis oleh scan
+  bernilai poin di server — kartu "2 dari 3 · otomatis dari scan" hidup;
+  selesai otomatis → kartu done + poin.
+- **Streak harian** (beranda): kartu **StreakCard** (pola `streak-card`
+  `beranda.html`) dari `GET /v1/streak` — judul "Streak N hari!", kalimat
+  motivasi bonus ("… N hari lagi untuk bonus +20 poin"), dan kalender 7 hari
+  (lingkaran inisial hari Indonesia, hari ini di-outline, `role=img` +
+  `aria-label`). Helper murni di `utils/streak.ts` (teruji vitest); skeleton
+  saat memuat dan kartu disembunyikan bila API gagal (pola best-effort beranda).
+- Level di header tetap dari profil — kini dihitung server lewat level engine
+  (`services/levels` di API) dan ikut menyesuaikan setelah poin berubah.
 
 ## Struktur & catatan
 
@@ -126,17 +149,21 @@ dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
 - `src/components/scan/ConsentCard.vue` — kartu persetujuan foto (PRD §9),
   dipakai layar Scan dan alur unggah bukti misi (Sprint 4).
 - `src/components/missions/MissionCard.vue` — kartu misi 4 keadaan (teruji vitest).
+- `src/components/home/StreakCard.vue` — kartu streak + kalender 7 hari (Sprint 5).
 - `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (FAB → `/scan`,
   Misi → `/misi` aktif sejak Sprint 4).
-- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat/misi + level),
-  ScanView (signature, Sprint 3), HistoryView (riwayat + filter, Sprint 3),
-  MissionsView (misi + lencana + klaim photo, Sprint 4), ProfileView.
+- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat/misi +
+  StreakCard + badge hasil verifikasi), ScanView (signature, Sprint 3),
+  HistoryView (riwayat + filter, Sprint 3),
+  MissionsView (misi + lencana + klaim photo/manual, Sprint 4–5), ProfileView.
 - `src/services/`: `camera.ts` (getUserMedia + capture JPEG + torch + galeri),
   `scan.ts` (endpoint `/v1/scan*`), `missions.ts` (endpoint `/v1/missions*`,
-  `/v1/badges`). `src/utils/` — `scan.ts`, `missions.ts` (keadaan kartu, peta
-  error klaim, progres; teruji vitest), `datetime.ts`, `consent.ts`.
+  `/v1/badges`), `streak.ts` (`GET /v1/streak`), `notifications.ts`
+  (`/v1/notifications*`). `src/utils/` — `scan.ts`, `missions.ts` (keadaan
+  kartu, peta error klaim, progres), `streak.ts` (judul/hint/kalender —
+  teruji vitest), `datetime.ts`, `consent.ts`.
 - `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout
-  + `applyPoints`).
+  + `applyPoints`, `addPoints`, `refreshProfile`).
 - Test: `npm test` (vitest + happy-dom) — unit helper `src/utils` + component
   `ConsentCard`, `MissionCard`.
 - Font & ikon di-bundle lokal (fontsource + `@fortawesome/fontawesome-free@6`) agar app

@@ -10,7 +10,10 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileResponse(BaseModel):
-    """Profil + level terhitung dari tabel levels (PRD §5.10 #2: level tidak disimpan)."""
+    """Profil + level terhitung dari tabel levels (PRD §5.10 #2: level tidak disimpan).
+
+    Sprint 5: tambahan info level berikutnya utk UI (sisa poin & progres).
+    """
 
     id: str
     email: str | None
@@ -21,3 +24,8 @@ class ProfileResponse(BaseModel):
     points: int
     level: int
     level_title: str
+    next_level: int | None = None
+    next_level_title: str | None = None
+    next_level_points: int | None = None  # poin minimal level berikutnya
+    current_streak: int = 0
+    longest_streak: int = 0

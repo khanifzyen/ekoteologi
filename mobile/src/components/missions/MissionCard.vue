@@ -1,22 +1,29 @@
 <script setup lang="ts">
 /**
- * Kartu misi (Sprint 4) — 1:1 pola `misi.html`: ikon, judul, poin, deskripsi,
- * progress bar (auto_scan), aksi klaim, catatan consent, chip status.
- * Keadaan kartu dari `utils/missions.ts` (available/progress/waiting/done/rejected).
+ * Kartu misi (Sprint 4–5) — 1:1 pola `misi.html`: ikon, judul, poin,
+ * deskripsi, progress bar (auto_scan), aksi klaim, catatan consent, chip
+ * status. Keadaan kartu dari `utils/missions.ts`
+ * (available/progress/waiting/done/rejected).
  */
 import { computed } from 'vue'
 
 import type { Mission } from '@/types/mission'
 import { claimStatusMeta, missionIcon, missionProgress, missionState, missionTypeLabel } from '@/utils/missions'
 
-const props = defineProps<{ mission: Mission }>()
+const props = defineProps<{
+  mission: Mission
+  /** ID misi yang sedang dikirim (utk spinner tombol) — dari induk. */
+  busyId?: number | null
+}>()
 
 const emit = defineEmits<{
   /** Minta buka alur unggah bukti (photo). */
   'claim-photo': []
-  /** Klaim manual / auto_scan → tampilkan info "menyusul Sprint 5". */
-  'claim-unavailable': []
+  /** Klaim misi manual — auto-approve, poin langsung masuk (Sprint 5). */
+  'claim-manual': []
 }>()
+
+const busy = computed(() => props.busyId === props.mission.id)
 
 const state = computed(() => missionState(props.mission))
 const icon = computed(() => missionIcon(props.mission))
@@ -28,14 +35,12 @@ const statusMeta = computed(() =>
 function onPrimary() {
   if (state.value === 'available') {
     if (props.mission.verification === 'photo') emit('claim-photo')
-    else emit('claim-unavailable')
+    else emit('claim-manual')
     return
   }
   if (state.value === 'rejected') {
     emit('claim-photo')
-    return
   }
-  emit('claim-unavailable')
 }
 </script>
 
@@ -93,14 +98,21 @@ function onPrimary() {
           class="btn btn-sm"
           :class="mission.verification === 'photo' ? 'btn-primary' : 'btn-gold'"
           type="button"
+          :disabled="busy"
           @click="onPrimary"
         >
+          <span
+            v-if="busy"
+            class="spinner dark"
+            aria-hidden="true"
+          />
           <i
+            v-else
             class="fas"
             :class="mission.verification === 'photo' ? 'fa-cloud-arrow-up' : 'fa-check'"
             aria-hidden="true"
           />
-          {{ state === 'rejected' ? 'Unggah Ulang Bukti' : mission.verification === 'photo' ? 'Unggah Bukti' : 'Klaim Poin' }}
+          {{ state === 'rejected' ? 'Unggah Ulang Bukti' : mission.verification === 'photo' ? 'Unggah Bukti' : busy ? 'Mengklaim…' : 'Klaim Poin' }}
         </button>
       </div>
       <p

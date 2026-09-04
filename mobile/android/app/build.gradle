@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+java {
+    // Toolchain Java 21 (Capacitor 8 / AGP 8) — diunduh otomatis via
+    // foojay-resolver bila mesin dev tidak punya JDK yang cocok (lihat
+    // settings.gradle). CI memakai setup-java 21.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 android {
     namespace = "id.ekoteologi.app"
     compileSdk = rootProject.ext.compileSdkVersion

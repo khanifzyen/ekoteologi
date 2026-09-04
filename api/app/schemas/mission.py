@@ -131,8 +131,12 @@ class ClaimAdminOut(BaseModel):
     review_note: str | None = None
     consent_at: datetime | None = None
     submitted_at: datetime | None = None
+    reviewed_at: datetime | None = None
     user: ClaimUserBrief
     mission: ClaimMissionBrief
+    # Total klaim (semua status) milik pengguna ini — konteks "Sejarah" pada
+    # layar verifikasi (`verifikasi.html`: "Misi ke-N pengguna ini").
+    user_claims_total: int = 0
 
 
 class ClaimsPage(BaseModel):
@@ -140,6 +144,13 @@ class ClaimsPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ClaimReviewRequest(BaseModel):
+    """Keputusan verifier (Sprint 5) — catatan wajib saat menolak."""
+
+    decision: str  # approved | rejected
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class ClaimResponse(BaseModel):

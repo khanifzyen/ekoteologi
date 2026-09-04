@@ -48,13 +48,22 @@ describe('MissionCard', () => {
     expect(wrapper.emitted('claim-photo')).toHaveLength(1)
   })
 
-  it('misi manual tersedia → tombol Klaim Poin memancarkan claim-unavailable', async () => {
+  it('misi manual tersedia → tombol Klaim Poin memancarkan claim-manual (Sprint 5)', async () => {
     const wrapper = mount(MissionCard, {
       props: { mission: makeMission({ verification: 'manual' }) },
     })
     expect(wrapper.find('button').text()).toContain('Klaim Poin')
     await wrapper.find('button').trigger('click')
-    expect(wrapper.emitted('claim-unavailable')).toHaveLength(1)
+    expect(wrapper.emitted('claim-manual')).toHaveLength(1)
+  })
+
+  it('misi manual sedang dikirim → tombol disabled dengan spinner', () => {
+    const wrapper = mount(MissionCard, {
+      props: { mission: makeMission({ verification: 'manual' }), busyId: 1 },
+    })
+    const btn = wrapper.find('button')
+    expect(btn.text()).toContain('Mengklaim…')
+    expect(btn.attributes('disabled')).toBeDefined()
   })
 
   it('klaim pending → status menunggu, tanpa tombol klaim', () => {

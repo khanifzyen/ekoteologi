@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
- * Layar Misi (Sprint 4) — 1:1 mockup `misi.html`: header melengkung dgn panel
- * progres mingguan, tab Harian (kartu misi 4 keadaan) & Pencapaian (lencana),
- * state lengkap (skeleton/empty/error), dan alur unggah bukti photo:
- * pilih foto → consent (PRD §9, kartu reusable Sprint 3) → kirim ke antrian.
+ * Layar Misi (Sprint 4–5) — 1:1 mockup `misi.html`: header melengkung dgn
+ * panel progres mingguan, tab Harian (kartu misi 4 keadaan) & Pencapaian
+ * (lencana), state lengkap (skeleton/empty/error), alur unggah bukti photo
+ * (consent PRD §9), tombol "Klaim Poin" misi manual (auto-approve), dan
+ * notifikasi hasil verifikasi in-app (chip status kartu — hasil ditandai
+ * dibaca setelah daftar dilihat).
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -14,7 +16,9 @@ import ConsentCard from '@/components/scan/ConsentCard.vue'
 import StateEmpty from '@/components/state/StateEmpty.vue'
 import StateError from '@/components/state/StateError.vue'
 import StateSkeleton from '@/components/state/StateSkeleton.vue'
-import { claimPhoto, fetchBadges, fetchMissions } from '@/services/missions'
+import { claimManual, claimPhoto, fetchBadges, fetchMissions } from '@/services/missions'
+import { fetchNotifications, markNotificationRead } from '@/services/notifications'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import type { BadgeItem, Mission } from '@/types/mission'
 import { hasFotoConsent, grantFotoConsent } from '@/utils/consent'
@@ -22,6 +26,7 @@ import { countNewMissions, describeClaimError, weekPercent } from '@/utils/missi
 
 const router = useRouter()
 const toast = useToastStore()
+const auth = useAuthStore()
 
 const loading = ref(true)
 const error = ref('')
@@ -31,6 +36,8 @@ const badges = ref<BadgeItem[]>([])
 const badgesLoading = ref(false)
 const badgesError = ref('')
 const tab = ref<'harian' | 'pencapaian'>('harian')
+/** ID misi yang sedang diproses klaim manualnya (spinner per kartu). */
+const busyClaimId = ref<number | null>(null)
 
 const percent = computed(() => weekPercent(summary.value.week_done, summary.value.week_total))
 const newCount = computed(() => countNewMissions(missions.value))
@@ -42,6 +49,7 @@ async function load() {
     const page = await fetchMissions()
     missions.value = page.items
     summary.value = page.summary
+    void markVerificationNotifsRead()
   } catch (err) {
     error.value =
       err instanceof ApiError
@@ -49,6 +57,21 @@ async function load() {
         : 'Gagal memuat misi. Periksa koneksi internetmu lalu coba lagi.'
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * Notif hasil verifikasi (in-app): chip status kartu adalah permukaannya —
+ * begitu daftar misi tampil, hasil verifikasi dianggap sudah dibaca.
+ */
+async function markVerificationNotifsRead() {
+  try {
+    const page = await fetchNotifications({ type: 'mission', limit: 50 })
+    await Promise.all(
+      page.items.filter((n) => n.read_at === null).map((n) => markNotificationRead(n.id)),
+    )
+  } catch {
+    /* best-effort — tidak memblokir layar misi */
   }
 }
 
@@ -73,6 +96,27 @@ function setTab(next: 'harian' | 'pencapaian') {
 onMounted(() => {
   void load()
 })
+
+// ── Alur klaim manual (Sprint 5): tombol "Klaim Poin" → langsung disetujui ──
+async function submitManualClaim(mission: Mission) {
+  if (busyClaimId.value !== null) return
+  busyClaimId.value = mission.id
+  try {
+    const result = await claimManual(mission.id)
+    const awarded = result.claim.points_awarded
+    if (awarded > 0) auth.addPoints(awarded)
+    toast.show(result.message)
+    void load()
+  } catch (err) {
+    const content = describeClaimError(
+      err instanceof ApiError ? err.status : -1,
+      err instanceof ApiError ? err.message : '',
+    )
+    toast.show(`${content.title} — ${content.message}`)
+  } finally {
+    busyClaimId.value = null
+  }
+}
 
 // ── Alur klaim photo (sheet unggah bukti) ──
 const claimMission = ref<Mission | null>(null)
@@ -144,10 +188,6 @@ async function submitClaim() {
   } finally {
     submitting.value = false
   }
-}
-
-function onUnavailable() {
-  toast.show('Klaim misi manual & auto_scan menyusul di Sprint 5.')
 }
 </script>
 
@@ -271,8 +311,9 @@ function onUnavailable() {
           v-for="mission in missions"
           :key="mission.id"
           :mission="mission"
+          :busy-id="busyClaimId"
           @claim-photo="openClaim(mission)"
-          @claim-unavailable="onUnavailable"
+          @claim-manual="submitManualClaim(mission)"
         />
       </template>
     </section>

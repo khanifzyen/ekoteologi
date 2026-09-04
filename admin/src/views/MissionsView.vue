@@ -6,6 +6,7 @@
  * approve/reject adalah modul Verifikasi (Sprint 5).
  */
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { ApiError, api } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -661,16 +662,25 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Antrian klaim (read-only — modul verifikasi Sprint 5) -->
+    <!-- Antrian klaim (ringkasan — aksi penuh di modul Verifikasi) -->
     <div class="panel">
       <div class="panel-head">
         <div>
           <h2>Klaim Masuk (Antrian Verifikasi)</h2>
           <div class="sub">
-            Bukti foto yang menunggu keputusan — aksi setuju/tolak menyusul di modul Verifikasi (Sprint 5)
+            Bukti foto yang menunggu keputusan — setujui/tolak di modul Verifikasi
           </div>
         </div>
-        <span class="badge badge-pending">{{ claimsTotal }} menunggu</span>
+        <RouterLink
+          class="btn btn-primary btn-sm"
+          to="/verifikasi"
+        >
+          <i
+            class="fas fa-clipboard-check"
+            aria-hidden="true"
+          />
+          Buka Verifikasi
+        </RouterLink>
       </div>
       <div
         v-if="claims.length === 0"

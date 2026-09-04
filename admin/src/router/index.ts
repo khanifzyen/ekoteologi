@@ -26,6 +26,11 @@ const router = createRouter({
           component: () => import('@/views/UsersView.vue'),
         },
         {
+          path: 'verifikasi',
+          name: 'verification',
+          component: () => import('@/views/VerificationView.vue'),
+        },
+        {
           path: 'misi',
           name: 'missions',
           component: () => import('@/views/MissionsView.vue'),

@@ -31,7 +31,7 @@ const initials = computed(() =>
 const mainNav: NavItem[] = [
   { label: 'Dashboard', icon: 'fa-gauge-high', to: '/' },
   { label: 'Pengguna', icon: 'fa-users', to: '/pengguna' }, // Sprint 4
-  { label: 'Verifikasi Misi', icon: 'fa-clipboard-check' }, // Sprint 5
+  { label: 'Verifikasi Misi', icon: 'fa-clipboard-check', to: '/verifikasi' }, // Sprint 5
   { label: 'Misi', icon: 'fa-bullseye', to: '/misi' }, // Sprint 4
   { label: 'E-Learning', icon: 'fa-book-open' }, // Sprint 7
   { label: 'Konten Harian', icon: 'fa-calendar-day' }, // Sprint 6

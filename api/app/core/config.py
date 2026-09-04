@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Batas ukuran foto bukti misi (klaim photo).
     mission_image_max_mb: int = 5
 
+    # ── Streak harian (Sprint 5) ──
+    # Bonus poin setiap kelipatan `streak_bonus_every_days` hari aktif.
+    # Default 6 mengikuti mockup `beranda.html` ("Streak 5 hari! … 1 hari
+    # lagi untuk bonus +20 poin" ⇒ bonus jatuh di hari ke-6). 0 = bonus mati.
+    streak_bonus_points: int = 20
+    streak_bonus_every_days: int = 6
+
     # ── Biaya LLM (dashboard admin, Sprint 4 — plan §5.3) ──
     # Estimasi biaya per 1.000 token (satuan mata uang lokal, mis. IDR) dan
     # budget bulanan (0 = belum ditetapkan → kartu menampilkan tanpa budget).

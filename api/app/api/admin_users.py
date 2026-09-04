@@ -1,8 +1,9 @@
 """Admin: daftar pengguna (Sprint 4) — tabel `admin/pengguna.html`.
 
 Read-only: pencarian, filter role/status, offset pagination, level dihitung
-dari tabel `levels` (pola profil Sprint 1). Aksi mutasi (blokir, ubah role,
-reset poin — PRD §3) menyusul sprint berikutnya sesuai rencana.
+lewat level engine (`services.levels` — Sprint 5, satu sumber dgn profil).
+Aksi mutasi (blokir, ubah role, reset poin — PRD §3) menyusul sprint
+berikutnya sesuai rencana.
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -12,18 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_db, require_roles
 from app.models import Level, User
 from app.schemas.admin_users import AdminUserOut, UsersPage
+from app.services.levels import resolve_level
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
-
-
-def _level_for(levels: list[Level], points: int) -> tuple[int, str]:
-    highest = None
-    for lvl in levels:
-        if lvl.min_points <= points and (highest is None or lvl.min_points > highest.min_points):
-            highest = lvl
-    if highest is None:
-        return 1, "Pemula"
-    return highest.level, highest.title
 
 
 @router.get("/users", response_model=UsersPage)
@@ -68,7 +60,7 @@ async def list_users(
 
     items: list[AdminUserOut] = []
     for u in rows:
-        level, level_title = _level_for(levels, u.points)
+        resolved = resolve_level(levels, u.points)
         items.append(
             AdminUserOut(
                 id=str(u.id),
@@ -78,8 +70,8 @@ async def list_users(
                 points=u.points,
                 role=u.role,
                 is_active=u.is_active,
-                level=level,
-                level_title=level_title,
+                level=resolved.level,
+                level_title=resolved.title,
                 created_at=u.created_at,
             )
         )

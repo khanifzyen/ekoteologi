@@ -245,6 +245,18 @@ async def list_claims(
         )
     ).all()
 
+    # Konteks "Sejarah" layar verifikasi: total klaim per pengguna (satu query
+    # terkelompok untuk seluruh halaman — bukan N+1).
+    page_user_ids = {claim.user_id for claim, _user, _mission in rows}
+    claims_per_user: dict = {}
+    if page_user_ids:
+        counts = await db.execute(
+            select(UserMission.user_id, func.count())
+            .where(UserMission.user_id.in_(page_user_ids))
+            .group_by(UserMission.user_id)
+        )
+        claims_per_user = dict(counts.all())
+
     items = [
         ClaimAdminOut(
             id=claim.id,
@@ -257,6 +269,7 @@ async def list_claims(
             review_note=claim.review_note,
             consent_at=claim.consent_at,
             submitted_at=claim.submitted_at,
+            reviewed_at=claim.reviewed_at,
             user=ClaimUserBrief(
                 id=str(claim_user.id),
                 full_name=claim_user.full_name,
@@ -268,6 +281,7 @@ async def list_claims(
                 points=mission.points,
                 verification=mission.verification,
             ),
+            user_claims_total=int(claims_per_user.get(claim.user_id, 0)),
         )
         for claim, claim_user, mission in rows
     ]

@@ -22,6 +22,12 @@ interface TokenPair {
 export interface ProfileData extends MobileUser {
   level: number
   level_title: string
+  /** Sprint 5: level berikutnya + streak (opsional — kompatibel server lama). */
+  next_level?: number | null
+  next_level_title?: string | null
+  next_level_points?: number | null
+  current_streak?: number
+  longest_streak?: number
 }
 
 const ACCESS_KEY = 'ekoteologi_access'
@@ -169,6 +175,29 @@ export const useAuthStore = defineStore('auth', () => {
     if (profile.value) profile.value = { ...profile.value, points: pointsTotal }
   }
 
+  /** Tambah poin delta (mis. klaim misi manual — level bisa berubah → profil disegarkan). */
+  function addPoints(delta: number) {
+    if (user.value) user.value = { ...user.value, points: user.value.points + delta }
+    if (profile.value) profile.value = { ...profile.value, points: profile.value.points + delta }
+    void refreshProfile()
+  }
+
+  /** Ambil profil dari server walau sudah ada di cache (sinkron level/streak). */
+  async function refreshProfile() {
+    if (!isAuthenticated.value) return
+    const data = await api<ProfileData>('/v1/profile')
+    profile.value = data
+    user.value = {
+      id: data.id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      avatar_url: data.avatar_url,
+      city: data.city,
+      points: data.points,
+    }
+  }
+
   function logout() {
     clearSession()
     sessionRestored.value = true
@@ -190,5 +219,7 @@ export const useAuthStore = defineStore('auth', () => {
     updateProfile,
     uploadAvatar,
     applyPoints,
+    addPoints,
+    refreshProfile,
   }
 })

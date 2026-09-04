@@ -4,9 +4,13 @@ import { useRouter } from 'vue-router'
 
 import { ApiError, apiUrl } from '@/api/client'
 import BottomNav from '@/components/layout/BottomNav.vue'
+import StreakCard from '@/components/home/StreakCard.vue'
+import { fetchNotifications } from '@/services/notifications'
+import { fetchStreak } from '@/services/streak'
 import { fetchHistory } from '@/services/scan'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import type { StreakStatus } from '@/types/streak'
 
 const router = useRouter()
 const toast = useToastStore()
@@ -34,6 +38,11 @@ const avatarSrc = computed(() => {
 
 const headerLoading = ref(true)
 const scanTotal = ref<number | null>(null)
+/** Kartu streak (Sprint 5) — best-effort; skeleton saat memuat, sembunyi saat gagal. */
+const streakLoading = ref(true)
+const streak = ref<StreakStatus | null>(null)
+/** Notif hasil verifikasi belum dibaca (badge kartu menu Misi). */
+const unreadMissions = ref(0)
 
 onMounted(async () => {
   try {
@@ -50,6 +59,20 @@ onMounted(async () => {
     scanTotal.value = page.total
   } catch {
     scanTotal.value = null
+  }
+  // Streak + notifikasi (Sprint 5) — best-effort juga.
+  try {
+    streak.value = await fetchStreak()
+  } catch {
+    streak.value = null
+  } finally {
+    streakLoading.value = false
+  }
+  try {
+    const page = await fetchNotifications({ type: 'mission', limit: 1 })
+    unreadMissions.value = page.unread_count
+  } catch {
+    unreadMissions.value = 0
   }
 })
 </script>
@@ -101,6 +124,29 @@ onMounted(async () => {
   </header>
 
   <main class="content-overlap">
+    <!-- Kartu streak (Sprint 5 — pola streak-card `beranda.html`) -->
+    <StreakCard
+      v-if="streak"
+      :streak="streak"
+    />
+    <div
+      v-else-if="streakLoading"
+      class="card streak-card skeleton-streak"
+      aria-hidden="true"
+    >
+      <span class="skeleton sk-circle" />
+      <div class="sk-lines">
+        <div
+          class="skeleton"
+          style="width: 45%"
+        />
+        <div
+          class="skeleton"
+          style="width: 80%"
+        />
+      </div>
+    </div>
+
     <!-- Menu utama (beranda.html) — kartu scan signature + riwayat; penuh di Sprint 6 -->
     <div class="menu-grid">
       <button
@@ -141,7 +187,10 @@ onMounted(async () => {
           aria-hidden="true"
         />
         <strong>Misi</strong>
-        <span>Klaim poin kebaikan</span>
+        <span>
+          <template v-if="unreadMissions > 0">{{ unreadMissions }} hasil verifikasi baru</template>
+          <template v-else>Klaim poin kebaikan</template>
+        </span>
       </button>
       <button
         class="menu-card"
@@ -167,6 +216,23 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-3);
+}
+/* Skeleton kartu streak (pola streak-card beranda.html) */
+.skeleton-streak {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.skeleton-streak .sk-circle {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.skeleton-streak .sk-lines {
+  flex: 1;
+  display: grid;
+  gap: var(--space-2);
 }
 .h-sub {
   font-size: var(--text-xs);

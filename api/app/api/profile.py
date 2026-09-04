@@ -1,7 +1,8 @@
-"""Profil user (Sprint 1): lihat, ubah nama/kota/avatar, unggah avatar.
+"""Profil user (Sprint 1, level via engine Sprint 5): lihat, ubah nama/kota/avatar.
 
 Avatar disimpan di `UPLOAD_DIR` (default `var/uploads`) dan dilayani statis di
 `/uploads`. Di produksi direktori ini harus di-mount sebagai volume.
+Level dihitung `services.levels.resolve_level` (PRD §5.10 #2) — tidak disimpan.
 """
 
 import uuid
@@ -15,6 +16,7 @@ from app.core.config import get_settings
 from app.core.deps import get_current_user, get_db
 from app.models import Level, User
 from app.schemas.profile import ProfileResponse, ProfileUpdate
+from app.services.levels import resolve_level
 
 router = APIRouter(prefix="/v1/profile", tags=["profile"])
 
@@ -27,25 +29,12 @@ _WEBP_PREFIX = b"RIFF"
 _WEBP_MARKER = b"WEBP"
 
 
-def _level_for(points: int, level_row: Level | None) -> tuple[int, str]:
-    if level_row is None:
-        return 1, "Pemula"
-    return level_row.level, level_row.title
+async def _level_ladder(db: AsyncSession) -> list[Level]:
+    return list((await db.scalars(select(Level).order_by(Level.min_points.asc()))).all())
 
 
-async def _highest_level(db: AsyncSession, points: int) -> Level | None:
-    return (
-        await db.scalars(
-            select(Level)
-            .where(Level.min_points <= points)
-            .order_by(Level.min_points.desc())
-            .limit(1)
-        )
-    ).first()
-
-
-def _to_response(user: User, level_row: Level | None) -> ProfileResponse:
-    level, title = _level_for(user.points, level_row)
+def _to_response(user: User, levels: list[Level]) -> ProfileResponse:
+    resolved = resolve_level(levels, user.points)
     return ProfileResponse(
         id=str(user.id),
         email=user.email,
@@ -54,8 +43,13 @@ def _to_response(user: User, level_row: Level | None) -> ProfileResponse:
         avatar_url=user.avatar_url,
         city=user.city,
         points=user.points,
-        level=level,
-        level_title=title,
+        level=resolved.level,
+        level_title=resolved.title,
+        next_level=resolved.next_level,
+        next_level_title=resolved.next_title,
+        next_level_points=resolved.next_min_points,
+        current_streak=user.current_streak,
+        longest_streak=user.longest_streak,
     )
 
 
@@ -63,7 +57,7 @@ def _to_response(user: User, level_row: Level | None) -> ProfileResponse:
 async def get_profile(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> ProfileResponse:
-    return _to_response(user, await _highest_level(db, user.points))
+    return _to_response(user, await _level_ladder(db))
 
 
 @router.patch("", response_model=ProfileResponse)
@@ -80,7 +74,7 @@ async def update_profile(
         user.avatar_url = payload.avatar_url or None
     await db.commit()
     await db.refresh(user)
-    return _to_response(user, await _highest_level(db, user.points))
+    return _to_response(user, await _level_ladder(db))
 
 
 def _detect_ext(data: bytes) -> str | None:
@@ -128,4 +122,4 @@ async def upload_avatar(
     user.avatar_url = f"/uploads/avatars/{filename}"
     await db.commit()
     await db.refresh(user)
-    return _to_response(user, await _highest_level(db, user.points))
+    return _to_response(user, await _level_ladder(db))

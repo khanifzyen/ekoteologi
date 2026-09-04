@@ -41,8 +41,28 @@ Cache LLM hit rate tampil di kaki chart garis (hit/total + persen).
 - **`MissionsView` (`/misi`)** — CRUD misi: form panel (judul, deskripsi, tipe,
   poin, mode verifikasi, target aksi, ikon, periode mulai/selesai, aktif) —
   tulis: admin+editor, hapus: admin (ditolak bila sudah ada klaim → nonaktifkan).
-  Panel "Klaim Masuk" menampilkan antrian bukti (status `pending`, consent
-  tercatat) read-only — aksi setuju/tolak = modul Verifikasi (Sprint 5).
+  Panel "Klaim Masuk" menampilkan ringkasan antrian bukti + tombol menuju
+  modul Verifikasi.
+
+## Modul Verifikasi Misi (Sprint 5)
+
+**`VerificationView` (`/verifikasi`)** — 1:1 mockup `verifikasi.html`, aksi
+`POST /v1/admin/claims/{id}/review` (role admin & verifier; editor hanya bisa
+melihat):
+
+- **Preview bukti besar** (`verif-stage`) + **strip antrian** thumbnail
+  (`queue-strip`, `role=listbox`) — klik untuk pindah item.
+- **Panel detail**: judul misi + sub ("Mingguan · verifikasi foto · +50 poin"),
+  pengguna (+kota), waktu unggah ("Hari ini, 09.12"), catatan user, sejarah
+  ("Misi ke-N pengguna ini" dari `user_claims_total`), dan badge consent foto.
+- **Catatan review wajib saat menolak** (AUDIT.md A2) — ditolak tanpa catatan
+  diblokir klien & server (400), fokus pindah ke textarea.
+- **Keyboard shortcut**: `A` = setujui, `R` = tolak, `←`/`→` = pindah antrian
+  (diabaikan saat fokus di input/textarea; didokumentasikan di `kbd-row`).
+- Setuju → poin lewat ledger + notifikasi in-app + event `misi_selesai`
+  (semua server-side); item keluar dari antrian, halaman berikutnya dimuat
+  otomatis bila masih ada. State lengkap: skeleton, error + Coba Lagi, dan
+  empty "Antrian selesai!".
 
 ## Perintah
 
@@ -50,7 +70,7 @@ Cache LLM hit rate tampil di kaki chart garis (hit/total + persen).
 npm ci
 npm run dev        # http://localhost:5174
 npm run lint       # eslint (flat config)
-npm run test       # vitest (util chart)
+npm run test       # vitest (util chart + util verifikasi)
 npm run build      # vue-tsc (typecheck) + vite build
 ```
 
@@ -73,8 +93,9 @@ src/
 ├── stores/             # auth (sesi+role), toast
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
 ├── utils/chart.ts      # matematika chart (murni, teruji vitest)
-└── views/              # LoginView, DashboardView (KPI+chart), UsersView, MissionsView
+├── utils/verification.ts # helper layar verifikasi (murni, teruji vitest)
+└── views/              # LoginView, DashboardView (KPI+chart), UsersView, VerificationView, MissionsView
 ```
 
-Catatan: modul menu lain (Verifikasi, E-Learning, dst.) sengaja nonaktif dengan toast
+Catatan: modul menu lain (E-Learning, Konten Harian, dst.) sengaja nonaktif dengan toast
 "menyusul" sesuai peta sprint; item Fase 2 diberi tanda *Segera* seperti mockup.

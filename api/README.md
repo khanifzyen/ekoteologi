@@ -70,7 +70,7 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | POST | `/v1/auth/refresh` | — | `{refresh_token}` → pasangan token baru (rotasi). Token bukan refresh/akun nonaktif → 401 |
 | POST | `/v1/auth/google` | — | `{id_token}` (dari Google Sign-In) → pasangan token. Verifikasi `aud` vs `GOOGLE_CLIENT_ID`; email sama dengan akun lama otomatis ditautkan |
 | GET | `/v1/auth/me` | Bearer | Profil ringkas user dari token |
-| GET | `/v1/profile` | Bearer | Profil + `level`/`level_title` dihitung dari tabel `levels` |
+| GET | `/v1/profile` | Bearer | Profil + level dari **level engine** (`services/levels`) — `level`, `level_title`, `next_level*` (sisa poin/progres menuju level berikutnya), `current_streak`, `longest_streak` (PRD §5.10 #2: level tidak disimpan) |
 | PATCH | `/v1/profile` | Bearer | Ubah `full_name`/`city`/`avatar_url` |
 | POST | `/v1/profile/avatar` | Bearer | Multipart `file` (JPG/PNG/WebP, ≤2 MB) → simpan di `UPLOAD_DIR`, `avatar_url` relatif `/uploads/avatars/…` |
 | POST | `/v1/scan` | Bearer | Multipart `file` foto (JPG/PNG/WebP, ≤`SCAN_IMAGE_MAX_MB`) → hasil analisis LLM tervalidasi (lihat "Arsitektur Scan AI"). 400/413 foto tidak valid, 429 kuota harian habis (+ header `Retry-After`), 503 Redis mati (fail-closed), 502 LLM gagal setelah retry+fallback |
@@ -78,7 +78,11 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/scans/categories` | — | Daftar kategori sampah (seed) utk filter chips — `{id, name, icon, base_points}` |
 | GET | `/v1/scans/quota` | Bearer | Pemakaian kuota hari ini tanpa mengkonsumsi slot → `{used, limit, remaining, resets_in_seconds}`. Redis mati → 503 (UI menyembunyikan pill kuota) |
 | GET | `/v1/missions` | Bearer | Daftar misi aktif dalam jendela periode + klaim saya periode berjalan (`my_claim`) + ringkasan mingguan (`{week_done, week_total, week_points}`) |
-| POST | `/v1/missions/{id}/claim` | Bearer | Klaim misi **photo**: multipart `file` bukti (JPG/PNG/WebP, ≤`MISSION_IMAGE_MAX_MB`) + `consent=true` (wajib — PRD §9, tercatat di `user_missions.consent_at`) → status `pending` (antrian verifikasi). 409 misi nonaktif/di luar periode/sudah diklaim periode ini; 400 mode non-photo (menyusul Sprint 5)/tanpa consent/format salah; 413 ukuran. Bukti yang **ditolak** boleh diganti (baris sama di-reset). Poin baru diberikan saat approve (Sprint 5) |
+| POST | `/v1/missions/{id}/claim` | Bearer | Klaim misi **photo**: multipart `file` bukti (JPG/PNG/WebP, ≤`MISSION_IMAGE_MAX_MB`) + `consent=true` (wajib — PRD §9, tercatat di `user_missions.consent_at`) → status `pending` (antrian verifikasi). Klaim misi **manual** (Sprint 5): tanpa file/consent → auto-approve, poin langsung lewat ledger, event `misi_selesai` + streak berdetak. Misi **auto_scan** tidak diklaim (400) — progresnya dari scan. 409 misi nonaktif/di luar periode/sudah diklaim periode ini; 400 tanpa consent/format salah; 413 ukuran. Bukti yang **ditolak** boleh diganti (baris sama di-reset) |
+| GET | `/v1/streak` | Bearer | Status streak harian (Sprint 5): `{current_streak (efektif), longest_streak, active_today, last_active_date, bonus_points, bonus_every_days, days_to_bonus, week[7]}` — kalender 7 hari dibangun dari tanggal baris ledger (baca saja; aktivitas dicatat lewat scan bernilai poin / klaim manual / approve) |
+| GET | `/v1/notifications` | Bearer | Notifikasi in-app milik user (terbaru dulu) + `unread_count` utk badge. Query: `type?` (mission\|streak\|info\|reward), `unread_only?`, `limit`, `offset` |
+| POST | `/v1/notifications/read` | Bearer | Tandai semua (atau `{ids}` tertentu) notifikasi milik user sebagai dibaca — idempoten |
+| POST | `/v1/notifications/{id}/read` | Bearer | Tandai satu notifikasi dibaca; 404 bila milik user lain |
 | GET | `/v1/badges` | Bearer | Lencana + flag `earned`/`earned_at` milik user (tab Pencapaian; pemberian otomatis = badge engine Sprint 6) |
 | GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users, scans, verification:{pending}, cache:{hit,miss,hit_rate}, llm:{cost_month, tokens_month, budget_monthly}}` — biaya LLM = token bulan berjalan (scan non-cache) × `LLM_COST_PER_1K_TOKENS` |
 | GET | `/v1/admin/charts` | Bearer panel | Data 2 chart dashboard: `daily` (scan/hari `days`=7–30, default 14, hari kosong = 0) & `categories` (7 hari, terbanyak dulu, persentase) |
@@ -86,7 +90,8 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | POST | `/v1/admin/missions` | Bearer admin·editor | Buat misi `{title, description?, type: daily\|weekly\|special, icon?, points, verification: photo\|auto_scan\|manual, scan_category_id? (wajib utk auto_scan), required_count?, start_at?, end_at?, is_active?}` → 201. Validasi: `start_at < end_at`, kategori harus ada |
 | PATCH | `/v1/admin/missions/{id}` | Bearer admin·editor | Ubah sebagian field misi (termasuk `is_active` utk nonaktifkan) |
 | DELETE | `/v1/admin/missions/{id}` | Bearer admin | Hapus misi; 409 bila sudah punya klaim (nonaktifkan saja — jaga riwayat) |
-| GET | `/v1/admin/claims` | Bearer panel | Antrian klaim (`user_missions` + user + misi, terbaru dulu). Query: `status?`, `mission_id?`, `limit`, `offset`. Read-only — aksi approve/reject = modul Verifikasi (Sprint 5) |
+| GET | `/v1/admin/claims` | Bearer panel | Antrian klaim (`user_missions` + user + misi, terbaru dulu) + `user_claims_total` (konteks "Sejarah" layar verifikasi). Query: `status?`, `mission_id?`, `limit`, `offset` |
+| POST | `/v1/admin/claims/{id}/review` | Bearer admin·verifier | Keputusan verifikasi (Sprint 5): `{decision: approved\|rejected, note?}`. Approve → poin misi lewat ledger + notifikasi in-app + event `misi_selesai` + streak user berdetak (satu transaksi). Reject → `note` **wajib** (400 tanpa catatan), tanpa poin. 409 bila klaim sudah direview. Tercatat di audit log |
 | GET | `/v1/admin/users` | Bearer panel | Daftar pengguna (+level dihitung dari `levels`). Query: `q?` (nama/email/kota), `role?`, `status?` (active\|blocked), `limit`, `offset` |
 | GET | `/uploads/*` | — | File statis (avatar, foto scan, bukti misi) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
@@ -173,15 +178,47 @@ nol di dev karena default `mock`.
 - **Consent foto bukti (keputusan §2.1 #6)**: klaim photo menuntut `consent=true`;
   waktu persetujuan dicatat server-side di `user_missions.consent_at` (bukan hanya
   localStorage perangkat). Foto bukti disimpan `UPLOAD_DIR/missions/` (dilayani
-  `/uploads`), hanya ditampilkan ke verifier/admin (layar verifikasi Sprint 5);
+  `/uploads`), hanya ditampilkan ke verifier/admin (layar verifikasi);
   penggantian bukti setelah penolakan menghapus berkas lama dari disk. Retensi:
   bukti hidup selama baris klaim ada; penghapusan atas permintaan lewat support
   (proses manual MVP) — kebijakan TTL otomatis ditinjau Sprint 8 dgn keputusan PO.
-- **Poin misi tidak diberikan saat klaim** — ledger hanya disentuh saat approval
-  (Sprint 5), sehingga antrian `pending` tidak mengubah `users.points`.
+- **Poin misi tidak diberikan saat klaim** — ledger hanya disentuh saat approval,
+  sehingga antrian `pending` tidak mengubah `users.points`.
 - **Biaya LLM**: dashboard menjumlahkan `llm_meta.tokens.total_tokens` baris
   scan non-cache bulan berjalan (baris cache menyalin meta panggilan asli —
   agar tidak dihitung ganda) × `LLM_COST_PER_1K_TOKENS`; mock mode = Rp0.
+
+### Verifikasi, level, streak, notifikasi (Sprint 5)
+
+- **Loop verifikasi tertutup** (`POST /v1/admin/claims/{id}/review`, role
+  admin/verifier): approve → `award_points(source="mission")` (ledger
+  append-only + sinkron `users.points`), notifikasi in-app "Misi disetujui!",
+  event `misi_selesai` (PRD §8), streak user berdetak — semuanya satu
+  transaksi. Reject → `note` wajib (400 bila kosong), notifikasi memuat
+  catatan, tanpa poin, dan user boleh mengunggah ulang bukti (baris sama
+  di-reset). Keputusan tercatat di audit log via middleware.
+- **Level engine** (`services/levels.py`, murni): level = entri tertinggi
+  `levels.min_points <= users.points`; level tidak pernah disimpan (PRD
+  §5.10 #2). Satu sumber untuk profil, admin users, dan respons review;
+  menghasilkan `next_level*` untuk UI progres.
+- **Streak harian** (`services/streak.py`): aktivitas = scan bernilai poin
+  (bukan duplikat), klaim manual, dan misi yang disetujui — semuanya menulis
+  ledger. `touch_streak` idempoten per hari; bolong ≥2 hari → tampil 0 dan
+  reset ke 1 saat aktif lagi (lazy, tanpa cron). Bonus +`STREAK_BONUS_POINTS`
+  (20) tiap kelipatan `STREAK_BONUS_EVERY_DAYS` (6 — mengikuti mockup
+  `beranda.html`: "Streak 5 hari! … 1 hari lagi untuk bonus +20 poin"),
+  lewat ledger `source="streak"` + notifikasi; event `streak_hari` tercatat
+  tiap hari aktif baru. `GET /v1/streak` membaca status + kalender 7 hari dari
+  tanggal baris ledger.
+- **Misi auto_scan**: tiap scan bernilai poin menaikkan `progress_count`
+  misi auto_scan aktif (filter `scan_category_id` bila diisi); baris
+  `user_missions` dibuat lazily (`in_progress`) dgn SAVEPOINT anti race.
+  Target `required_count` tercapai → approve otomatis (poin + notifikasi +
+  event), pola sama dgn approve verifier.
+- **Notifikasi in-app** (`notifications`, PRD §5.9): hasil verifikasi,
+  misi auto_scan selesai, bonus streak, dan poin klaim manual. Endpoint
+  list + tandai dibaca (satu/semua); `unread_count` untuk badge. Push FCM
+  menyusul Sprint 6 (baris yang sama jadi sumber push).
 
 ## Middleware audit log
 

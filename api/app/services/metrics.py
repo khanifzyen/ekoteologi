@@ -1,7 +1,8 @@
 """Instrumentasi metrik produk (Sprint 3) — PRD §8 / implementation-plan §5.3.
 
-Event wajib sejak Sprint 3: `scan_pertama` (aktivasi). `misi_selesai`,
-`modul_selesai`, dan `streak_hari` menyusul di sprint masing-masing lewat
+Event wajib sejak Sprint 3: `scan_pertama` (aktivasi). Sprint 5 menambah
+`misi_selesai` (klaim disetujui / misi manual / auto_scan tuntas) dan
+`streak_hari` (hari aktif baru). `modul_selesai` menyusul di Sprint 7 lewat
 fungsi yang sama — satu tabel `analytics_events` append-only (hanya INSERT,
 tidak pernah UPDATE/DELETE) agar angka aktivasi bisa diaudit.
 """
@@ -15,7 +16,9 @@ from app.models import AnalyticsEvent
 
 # Nama event yang sah — menjaga konsistensi nama antar sprint (PRD §8).
 EVENT_SCAN_PERTAMA = "scan_pertama"
-KNOWN_EVENTS = {EVENT_SCAN_PERTAMA}
+EVENT_MISI_SELESAI = "misi_selesai"
+EVENT_STREAK_HARI = "streak_hari"
+KNOWN_EVENTS = {EVENT_SCAN_PERTAMA, EVENT_MISI_SELESAI, EVENT_STREAK_HARI}
 
 
 async def track_event(

@@ -1,4 +1,4 @@
-/** Service Misi (Sprint 4) — pembungkus endpoint `/v1/missions*` & `/v1/badges`. */
+/** Service Misi (Sprint 4–5) — pembungkus endpoint `/v1/missions*` & `/v1/badges`. */
 
 import { api } from '@/api/client'
 import type { BadgeItem, ClaimResponse, Mission, MissionsPage } from '@/types/mission'
@@ -13,6 +13,12 @@ export function claimPhoto(missionId: number, photo: Blob, consent: boolean): Pr
   const formData = new FormData()
   formData.append('consent', consent ? 'true' : 'false')
   formData.append('file', photo, 'bukti-misi.jpg')
+  return api<ClaimResponse>(`/v1/missions/${missionId}/claim`, { method: 'POST', formData })
+}
+
+/** Klaim misi manual (Sprint 5): auto-approve — poin langsung masuk. */
+export function claimManual(missionId: number): Promise<ClaimResponse> {
+  const formData = new FormData()
   return api<ClaimResponse>(`/v1/missions/${missionId}/claim`, { method: 'POST', formData })
 }
 

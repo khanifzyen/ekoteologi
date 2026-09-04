@@ -12,13 +12,16 @@ from app.api import (
     admin_dashboard,
     admin_missions,
     admin_users,
+    admin_verification,
     audit,
     auth,
     health,
     missions,
+    notifications,
     profile,
     scan,
     scan_history,
+    streak,
 )
 from app.core.config import get_settings
 from app.core.redis import close_redis
@@ -54,7 +57,10 @@ def create_app() -> FastAPI:
     app.include_router(scan.router)
     app.include_router(scan_history.router)
     app.include_router(missions.router)
+    app.include_router(streak.router)
+    app.include_router(notifications.router)
     app.include_router(admin_missions.router)
+    app.include_router(admin_verification.router)
     app.include_router(admin_users.router)
     app.include_router(admin_dashboard.router)
     app.include_router(audit.router)

@@ -28,7 +28,9 @@ from app.services import scan_cache, scan_limit
 from app.services.ledger import award_points
 from app.services.llm import LLMError, get_llm_provider
 from app.services.metrics import EVENT_SCAN_PERTAMA, track_event
+from app.services.missions import apply_scan_progress
 from app.services.quotes import quote_for_category
+from app.services.streak import touch_streak
 
 logger = logging.getLogger("ekoteologi.scan")
 
@@ -191,6 +193,22 @@ async def create_scan(
             name=EVENT_SCAN_PERTAMA,
             payload={"scan_id": scan.id, "category": category.name, "points": points},
         )
+    if points > 0:
+        # Streak harian (Sprint 5): scan bernilai poin = aktivitas hari ini
+        # (idempoten per hari; bonus bonus kelipatan lewat ledger "streak").
+        streak_result = await touch_streak(db, user=user)
+        # Progres misi auto_scan (Sprint 5): scan sama ikut mengisi
+        # `progress_count`; target tercapai → approve + poin + notifikasi.
+        completions = await apply_scan_progress(db, user=user, category_id=category.id)
+        for done in completions:
+            logger.info(
+                "EVENT misi_selesai user=%s mission=%s (auto_scan) points=%d",
+                user.id,
+                done.mission_id,
+                done.points,
+            )
+    else:
+        streak_result = None
     await db.commit()
     await db.refresh(scan)
 
@@ -206,6 +224,13 @@ async def create_scan(
     )
     if is_first_scan:
         logger.info("EVENT scan_pertama user=%s scan=%s (aktivasi — PRD §8)", user.id, scan.id)
+    if streak_result is not None and streak_result.incremented:
+        logger.info(
+            "EVENT streak_hari user=%s streak=%d bonus=%d (PRD §8)",
+            user.id,
+            streak_result.streak,
+            streak_result.bonus_awarded,
+        )
     return ScanResponse(
         id=scan.id,
         item_name=scan.item_name,

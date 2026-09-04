@@ -142,7 +142,11 @@ async def test_klaim_tanpa_consent_ditolak(client, member_user, db_session):
     assert total == 0
 
 
-async def test_klaim_mode_manual_dan_auto_scan_belum_tersedia(client, member_user, db_session):
+async def test_klaim_mode_manual_auto_approve_dan_auto_scan_ditolak(
+    client, member_user, db_session
+):
+    """Sprint 5: manual = auto-approve (poin langsung); auto_scan tetap tidak
+    bisa diklaim manual — progresnya dari scan."""
     manual_id = await _create_mission(
         db_session, title="Misi Manual", verification="manual", points=10
     )
@@ -151,16 +155,32 @@ async def test_klaim_mode_manual_dan_auto_scan_belum_tersedia(client, member_use
     )
     token = await login_token(client, member_user.email, "password123")
     headers = {"Authorization": f"Bearer {token}"}
-    files = {"file": ("bukti.png", PNG, "image/png")}
 
-    r1 = await client.post(
-        f"/v1/missions/{manual_id}/claim", data=_claim_payload(), files=files, headers=headers
-    )
-    assert r1.status_code == 400
+    # auto_scan: klaim manual ditolak 400 (kerjakan lewat scan).
     r2 = await client.post(
-        f"/v1/missions/{autoscan_id}/claim", data=_claim_payload(), files=files, headers=headers
+        f"/v1/missions/{autoscan_id}/claim",
+        data={"consent": "true"},
+        headers=headers,
     )
     assert r2.status_code == 400
+    assert "scan" in r2.json()["detail"].lower()
+
+    # manual: langsung approved + poin lewat ledger.
+    r1 = await client.post(
+        f"/v1/missions/{manual_id}/claim",
+        data={},
+        headers=headers,
+    )
+    assert r1.status_code == 201, r1.text
+    body = r1.json()
+    assert body["claim"]["status"] == "approved"
+    assert body["claim"]["points_awarded"] == 10
+    assert "+10" in body["message"]
+
+    total = await db_session.scalar(
+        select(func.count()).select_from(UserMission).where(UserMission.mission_id == manual_id)
+    )
+    assert total == 1
 
 
 async def test_klaim_validasi_foto(client, member_user, db_session):
