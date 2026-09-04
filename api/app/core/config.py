@@ -96,6 +96,25 @@ class Settings(BaseSettings):
     fcm_credentials_file: str = ""  # path JSON service account
     fcm_project_id: str = ""
 
+    # ── Hardening (Sprint 8) ──
+    # Rate limit global per IP untuk seluruh path `/v1/*` (fixed window per
+    # menit). 0 = mati. Lapisan ini fail-OPEN (ketersediaan) — kontras dengan
+    # kuota scan yang fail-CLOSED (budget LLM nyata); lapisan login & scan
+    # tetap berjalan sendiri di atasnya.
+    global_rate_limit_per_minute: int = 240
+    # Sentry (opsional): tanpa DSN tidak aktif sama sekali (nol overhead).
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.0  # 0–1; 0 = performa tidak dilacak
+
+    # ── Streak reminder (Sprint 8) ──
+    # Notifikasi "streak berisiko" untuk user aktif kemarin yang belum aktif
+    # hari ini. Scheduler in-process berjalan tiap `scheduler_interval_minutes`
+    # dan mengirim sekali per hari setelah jam `streak_reminder_hour` (zona
+    # server). 0/False = mati. Juga bisa dipicu manual via endpoint admin.
+    streak_reminder_enabled: bool = True
+    streak_reminder_hour: int = 8
+    scheduler_interval_minutes: int = 15
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

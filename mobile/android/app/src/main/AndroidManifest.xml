@@ -37,5 +37,23 @@
 
     <!-- Permissions -->
 
+    <!-- Jaringan: API + aset web (mode https via androidScheme). -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Kamera (PRD §9 — deklarasi Play Store, Sprint 8): preview scan AR
+         getUserMedia di WebView + input file capture utk bukti misi.
+         SEMENTARA (hanya saat jepret) dan TIDAK di latar belakang — tidak
+         ada izin lain terkait kamera. Play Store: "Camera — scan sampah
+         dengan AI & unggah bukti misi (opsional)". -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- required=false: aplikasi tetap terpasang di perangkat tanpa kamera
+         (fitur scan ditangani state error + fallback galeri). -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Push FCM (Sprint 6/8): Android 13+ menuntut izin runtime
+         POST_NOTIFICATIONS — diminta oleh plugin @capacitor/push-notifications
+         saat pertama masuk app (di web/dev di-skip). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

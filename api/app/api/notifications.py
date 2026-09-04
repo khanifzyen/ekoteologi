@@ -1,19 +1,23 @@
-"""Notifikasi in-app (Sprint 5) — hasil verifikasi misi & bonus streak.
+"""Notifikasi in-app (Sprint 5; broadcast sejak Sprint 8).
 
 `GET  /v1/notifications`            — daftar notifikasi milik user + jumlah
                                       belum dibaca (badge UI).
 `POST /v1/notifications/read`       — tandai dibaca massal (idempoten).
 `POST /v1/notifications/{id}/read`  — tandai satu dibaca.
 
-Broadcast (`user_id` NULL) baru ada saat composer push Sprint 8 dan di sini
-sengaja TIDAK disertakan — penerima broadcast adalah domain FCM. Push FCM
-itu sendiri menyusul Sprint 6 sesuai rencana.
+Sejak Sprint 8 daftar juga menyertakan **broadcast** (`user_id NULL` —
+composer push admin dan pengumuman "misi baru"): satu baris untuk semua
+penerima, sesuai desain skema PRD §5.9. Semantik baca tetap personal dan
+jujur: `read_at` milik baris tidak bisa dipakai per-user tanpa memengaruhi
+semua orang, jadi (a) `unread_count` hanya menghitung notifikasi personal
+(badge tidak "nyangkut" karena broadcast), (b) endpoint tandai-baca hanya
+menyentuh baris milik user (broadcast diabaikan, tetap 2xx idempoten).
 """
 
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
@@ -32,12 +36,14 @@ async def list_notifications(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationsPage:
-    """Notifikasi milik user, terbaru dulu + `unread_count` utk badge."""
-    filters = [Notification.user_id == user.id]
+    """Notifikasi milik user + broadcast, terbaru dulu + `unread_count` badge."""
+    filters = [or_(Notification.user_id == user.id, Notification.user_id.is_(None))]
     if type_ is not None:
         filters.append(Notification.type == type_)
     if unread_only:
+        # unread hanya personal — broadcast tidak pernah "wajib dibaca".
         filters.append(Notification.read_at.is_(None))
+        filters.append(Notification.user_id == user.id)
 
     total = await db.scalar(select(func.count()).select_from(Notification).where(*filters))
     unread_count = int(

@@ -37,8 +37,8 @@ const mainNav: NavItem[] = [
   { label: 'E-Learning', icon: 'fa-book-open', to: '/e-learning' }, // Sprint 7
 ]
 const systemNav: NavItem[] = [
-  { label: 'Push Notifikasi', icon: 'fa-bell' }, // Sprint 8
-  { label: 'Audit Log', icon: 'fa-list-check' }, // Sprint 8
+  { label: 'Push Notifikasi', icon: 'fa-bell', to: '/push' }, // Sprint 8
+  { label: 'Audit Log', icon: 'fa-list-check' }, // menyusul (endpoint Sprint 0 ada)
   { label: 'Laporan', icon: 'fa-file-csv' }, // Sprint 8
 ]
 const phase2Nav: NavItem[] = [
@@ -225,8 +225,8 @@ function onLogout() {
           <button
             class="top-icon"
             type="button"
-            aria-label="Notifikasi (menyusul Sprint 8)"
-            @click="toast.show('Notifikasi push tampil mulai Sprint 8.')"
+            aria-label="Push Notifikasi"
+            @click="router.push('/push')"
           >
             <i
               class="fas fa-bell"

@@ -106,13 +106,34 @@ melihat):
 - Role: tulis admin·editor; hapus admin. Logika editor diekstrak ke
   `utils/elearning.ts` (murni, 11 test vitest).
 
+## Composer Push (Sprint 8)
+
+**`PushView` (`/push`, menu "Push Notifikasi" grup Sistem)** — story
+"Admin: composer push (semua/segmen) — role admin saja; audit log":
+
+- **Kartu segmen** (dari `GET /v1/admin/push/segments`): Semua pengguna
+  aktif · Aktif 7 hari terakhir · Pasif >7 hari · Punya token push — tiap
+  kartu menampilkan jumlah penerima + perangkat; kartu segmen terpilih
+  di-highlight.
+- **Composer**: judul (4–64), isi (8–300), pilih segmen lewat chip
+  (`aria-pressed`); konfirmasi menampilkan estimasi penerima/perangkat.
+  Kirim → `POST /v1/admin/push/broadcast` (**server menolak role non-admin**,
+  mencatat audit `push.broadcast` dgn rekap penerima). Panel hasil +
+  toast menampilkan "Terkirim ke N dari M perangkat (K penerima)".
+- **Riwayat Broadcast**: 20 pengiriman terakhir (waktu, pesan, segmen,
+  penerima/perangkat/terkirim dari payload).
+- Role panel lain (verifier/editor) melihat data read-only dgn keterangan
+  "Hanya role Admin yang dapat mengirim push".
+- Logika komposer murni ada di `utils/push.ts` (validasi, ringkasan,
+  label riwayat — teruji vitest).
+
 ## Perintah
 
 ```bash
 npm ci
 npm run dev        # http://localhost:5174
 npm run lint       # eslint (flat config)
-npm run test       # vitest (util chart + util verifikasi + util e-learning)
+npm run test       # vitest (util chart + verifikasi + e-learning + push)
 npm run build      # vue-tsc (typecheck) + vite build
 ```
 
@@ -136,8 +157,10 @@ src/
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
 ├── utils/chart.ts      # matematika chart (murni, teruji vitest)
 ├── utils/verification.ts # helper layar verifikasi (murni, teruji vitest)
-└── views/              # LoginView, DashboardView (KPI+chart), UsersView, VerificationView, MissionsView, ContentsView
+├── utils/push.ts       # validasi & label composer push (murni, teruji vitest — Sprint 8)
+└── views/              # LoginView, DashboardView (KPI+chart), UsersView, VerificationView, MissionsView, ContentsView, PushView (Sprint 8)
 ```
 
-Catatan: modul menu lain (E-Learning, dst.) sengaja nonaktif dengan toast
-"menyusul" sesuai peta sprint; item Fase 2 diberi tanda *Segera* seperti mockup.
+Catatan: item menu "Audit Log" dan "Laporan" sengaja masih nonaktif dgn toast
+"menyusul" (endpoint audit ada sejak Sprint 0 — viewer belum jadi story);
+item Fase 2 diberi tanda *Segera* seperti mockup.

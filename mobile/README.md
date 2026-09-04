@@ -208,6 +208,33 @@ dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
   FOUT saat slide tampil; navigasi geser (swipe ≥48px) & tombol panah
   keyboard; perpindahan slide diumumkan `aria-live=polite`.
 
+## Sprint 8 — persiapan rilis (izin Android, signing, AAB)
+
+Perubahan sisi mobile sengaja **tipis** (sprint stabilisasi — tanpa fitur
+baru); yang dikerjakan persiapan rilis Play Store internal testing:
+
+- **Izin manifest** (`android/app/src/main/AndroidManifest.xml`):
+  - `CAMERA` — preview scan (`getUserMedia` di WebView) + input file
+    `capture` bukti misi; `uses-feature camera required=false` agar
+    perangkat tanpa kamera tetap bisa memasang.
+  - `POST_NOTIFICATIONS` (Android 13+) — diminta plugin
+    `@capacitor/push-notifications` saat pertama masuk app (Sprint 6).
+  - Justifikasi utk form Play Store & data safety: lihat
+    `docs/release/PLAY-STORE-CHECKLIST.md` (PRD §9).
+- **Signing release via env** (`android/app/build.gradle`): `EKO_STORE_FILE`,
+  `EKO_STORE_PASSWORD`, `EKO_KEY_ALIAS`, `EKO_KEY_PASSWORD` — tanpa env,
+  `bundleRelease` menghasilkan AAB **unsigned** (build smoke lokal sudah
+  terbukti); kunci rilis tidak pernah di-commit (`.gitignore`).
+- **Versi via env**: `EKO_VERSION_CODE` / `EKO_VERSION_NAME` (default 1 /
+  1.0.0) — CI bisa menaikkan tanpa edit kode.
+- **Build artefak**: `make apk` (APK debug, ±7,3 MB) dan
+  `cd android && ./gradlew bundleRelease` (AAB ±5,7 MB) — keduanya
+  BUILD SUCCESSFUL; AAB yang ditandatangani kunci rilis-lah yang diunggah ke
+  Play (checklist §2).
+- **QA regresi**: smoke E2E 33 langkah lintas alur kritis di API
+  (`make api-smoke`), matriks perangkat manual menunggu perangkat fisik —
+  `docs/qa/DEVICE-MATRIX.md`.
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.

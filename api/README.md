@@ -42,6 +42,11 @@ Salin `.env.example` → `.env`. Semua via environment, tidak ada yang hardcode.
 | `SCAN_CACHE_TTL_HOURS` / `SCAN_CACHE_SCHEMA` | `24` / `v1` | TTL cache Redis per hash foto; naikkan schema utk menggusur cache lama |
 | `PUSH_MODE` | `log` | Pengirim push (Sprint 6): `log` (dev/test — push dicatat di log, tanpa kredensial) atau `fcm` |
 | `FCM_CREDENTIALS_FILE` / `FCM_PROJECT_ID` | kosong | JSON service account (permission `firebase.messaging`) + project id — wajib utk `PUSH_MODE=fcm`; tanpa keduanya fallback ke log |
+| `GLOBAL_RATE_LIMIT_PER_MINUTE` | `240` | Rate limit global per IP utk seluruh `/v1/*` (Sprint 8 — fixed window/menit; `0` = mati; **fail-open** bila Redis mati — kontras dgn kuota scan yang fail-closed) |
+| `SENTRY_DSN` | kosong | Sentry opsional (Sprint 8) — tanpa DSN **tidak aktif sama sekali**; 4xx yang disengaja tidak dikirim |
+| `SENTRY_TRACES_SAMPLE_RATE` | `0` | 0–1 pelacakan performa; 0 = tidak dilacak |
+| `STREAK_REMINDER_ENABLED` / `STREAK_REMINDER_HOUR` | `true` / `8` | Notifikasi "streak berisiko" (Sprint 8): scheduler in-process mengirim **sekali per hari** (penanda di `app_settings`) setelah jam `H` zona server |
+| `SCHEDULER_INTERVAL_MINUTES` | `15` | Interval bangun scheduler in-process (idempoten — aman restart/multi-worker) |
 
 ## Struktur
 
@@ -49,16 +54,18 @@ Salin `.env.example` → `.env`. Semua via environment, tidak ada yang hardcode.
 app/
 ├── api/          # router: health, auth (register/login/refresh/google/me), profile, scan,
 │                 # scan_history (riwayat/kuota/kategori), admin_dashboard (KPI), audit-logs
-├── core/         # config (pydantic-settings), security (bcrypt+JWT access/refresh), deps, redis
+├── core/         # config (pydantic-settings), security (bcrypt+JWT access/refresh), deps,
+│                 # redis, sentry (opsional via env — Sprint 8)
 ├── db/           # engine & session async
-├── middleware/   # audit_log.py — pencatatan request mutating
+├── middleware/   # audit_log.py + rate_limit.py (global /v1/*) + security_headers.py (Sprint 8)
 ├── models/       # 27 tabel PRD §5 + analytics_events (metrik, Sprint 3)
 ├── schemas/      # Pydantic request/response
 └── services/     # audit, rate_limit (login), google, llm (adapter+mock+openai-compat),
                   # scan_cache, scan_limit, ledger (poin), quotes (bank terkurasi),
-                  # metrics (event aktivasi — Sprint 3)
+                  # metrics (event PRD §8), streak_reminder + scheduler (Sprint 8),
+                  # broadcast (composer push + segmen — Sprint 8)
 alembic/          # migrasi (template async)
-scripts/          # create_admin.py, seed.py (kategori sampah, level, badge)
+scripts/          # create_admin.py, seed.py, smoke.py (E2E lintas alur kritis — Sprint 8)
 tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 ```
 
@@ -82,7 +89,7 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/missions` | Bearer | Daftar misi aktif dalam jendela periode + klaim saya periode berjalan (`my_claim`) + ringkasan mingguan (`{week_done, week_total, week_points}`) |
 | POST | `/v1/missions/{id}/claim` | Bearer | Klaim misi **photo**: multipart `file` bukti (JPG/PNG/WebP, ≤`MISSION_IMAGE_MAX_MB`) + `consent=true` (wajib — PRD §9, tercatat di `user_missions.consent_at`) → status `pending` (antrian verifikasi). Klaim misi **manual** (Sprint 5): tanpa file/consent → auto-approve, poin langsung lewat ledger, event `misi_selesai` + streak berdetak. Misi **auto_scan** tidak diklaim (400) — progresnya dari scan. 409 misi nonaktif/di luar periode/sudah diklaim periode ini; 400 tanpa consent/format salah; 413 ukuran. Bukti yang **ditolak** boleh diganti (baris sama di-reset) |
 | GET | `/v1/streak` | Bearer | Status streak harian (Sprint 5): `{current_streak (efektif), longest_streak, active_today, last_active_date, bonus_points, bonus_every_days, days_to_bonus, week[7]}` — kalender 7 hari dibangun dari tanggal baris ledger (baca saja; aktivitas dicatat lewat scan bernilai poin / klaim manual / approve) |
-| GET | `/v1/notifications` | Bearer | Notifikasi in-app milik user (terbaru dulu) + `unread_count` utk badge. Query: `type?` (mission\|streak\|info\|reward), `unread_only?`, `limit`, `offset` |
+| GET | `/v1/notifications` | Bearer | Notifikasi in-app milik user (terbaru dulu) + `unread_count` utk badge. Sejak Sprint 8 list juga memuat **broadcast** (`user_id NULL` — composer push admin & pengumuman misi baru); semantik baca tetap personal: `unread_count` & tandai-baca hanya menyentuh baris milik user. Query: `type?` (mission\|streak\|info\|reward), `unread_only?`, `limit`, `offset` |
 | POST | `/v1/notifications/read` | Bearer | Tandai semua (atau `{ids}` tertentu) notifikasi milik user sebagai dibaca — idempoten |
 | POST | `/v1/notifications/{id}/read` | Bearer | Tandai satu notifikasi dibaca; 404 bila milik user lain |
 | GET | `/v1/badges` | Bearer | Lencana + flag `earned`/`earned_at` milik user (tab Pencapaian). **Badge engine (Sprint 6)**: sebelum daftar dikirim, kriteria JSONB dievaluasi lazy — lencana yang layak diberikan + dinotifikasikan (`type=info`); evaluasi on-event juga jalan di momen poin masuk (scan bernilai poin, approve/klaim manual misi) |
@@ -99,7 +106,7 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users, scans, verification:{pending}, cache:{hit,miss,hit_rate}, llm:{cost_month, tokens_month, budget_monthly}}` — biaya LLM = token bulan berjalan (scan non-cache) × `LLM_COST_PER_1K_TOKENS` |
 | GET | `/v1/admin/charts` | Bearer panel | Data 2 chart dashboard: `daily` (scan/hari `days`=7–30, default 14, hari kosong = 0) & `categories` (7 hari, terbanyak dulu, persentase) |
 | GET | `/v1/admin/missions` | Bearer panel | Daftar misi + rekap klaim (`claims_total`, `claims_pending`). Query: `is_active?`, `verification?`, `q?` (judul), `limit` (1–100), `offset` |
-| POST | `/v1/admin/missions` | Bearer admin·editor | Buat misi `{title, description?, type: daily\|weekly\|special, icon?, points, verification: photo\|auto_scan\|manual, scan_category_id? (wajib utk auto_scan), required_count?, start_at?, end_at?, is_active?}` → 201. Validasi: `start_at < end_at`, kategori harus ada |
+| POST | `/v1/admin/missions` | Bearer admin·editor | Buat misi `{title, description?, type: daily\|weekly\|special, icon?, points, verification: photo\|auto_scan\|manual, scan_category_id? (wajib utk auto_scan), required_count?, start_at?, end_at?, is_active?}` → 201. Validasi: `start_at < end_at`, kategori harus ada. Sejak Sprint 8: membuat misi juga **mengumumkan "Misi baru!"** ke semua pengguna aktif (1 baris broadcast + push best-effort) |
 | PATCH | `/v1/admin/missions/{id}` | Bearer admin·editor | Ubah sebagian field misi (termasuk `is_active` utk nonaktifkan) |
 | DELETE | `/v1/admin/missions/{id}` | Bearer admin | Hapus misi; 409 bila sudah punya klaim (nonaktifkan saja — jaga riwayat) |
 | GET | `/v1/admin/claims` | Bearer panel | Antrian klaim (`user_missions` + user + misi, terbaru dulu) + `user_claims_total` (konteks "Sejarah" layar verifikasi). Query: `status?`, `mission_id?`, `limit`, `offset` |
@@ -124,6 +131,11 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/uploads/*` | — | File statis (avatar, foto scan, bukti misi) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
+| GET | `/v1/admin/push/segments` | Bearer admin | Rekap penerima + token per segmen (Sprint 8 — preview komposer): `all`, `aktif_7hari`, `pasif_7hari`, `bertoken` — akun nonaktif tidak pernah dihitung |
+| POST | `/v1/admin/push/broadcast` | Bearer admin | **Composer push (Sprint 8 — role admin saja)**: `{title (4–64), body (8–300), segment}` → membuat 1 baris broadcast `notifications` (`user_id NULL`, tampil di list tiap user) + push FCM best-effort ke token segmen (batch 500). Respons `{id, segment, recipients, tokens, sent}`; rekap tersimpan di payload + **audit eksplisit** `push.broadcast` |
+| GET | `/v1/admin/push/history` | Bearer admin | 20 broadcast terakhir + rekap penerima/terkirim dari payload |
+| POST | `/v1/admin/notifications/streak-reminder` | Bearer admin | Jalankan streak reminder sekarang (idempoten per hari; `?force=true` khusus demo/ops) → `{date, targets, sent, skipped}` |
+| GET | `/v1/admin/metrics/events` | Bearer panel | Rekap event metrik PRD §8 (Sprint 8): total per nama (`scan_pertama`, `misi_selesai`, `streak_hari`, `modul_selesai`) + bucket harian pada jendela `days` (1–90, default 30) |
 
 ### Alur token (Sprint 1)
 
@@ -303,6 +315,45 @@ nol di dev karena default `mock`.
 - **Env baru**: `QUIZ_PASS_PERCENT` (70), `QUIZ_POINTS` (20) — ambang &
   hadiah bisa diubah PO tanpa deploy.
 
+## Notifikasi event, composer & hardening (Sprint 8)
+
+- **Notif event** — semua sumber notifikasi kini ter-pipe ke FCM
+  (`push_notification` / `send_broadcast`, best-effort setelah commit):
+  - *Misi approve* (Sprint 5) — hasil verifikasi approve/reject.
+  - *Misi baru* — `announce_new_mission()` saat admin membuat misi: 1 baris
+    broadcast (`user_id NULL`, payload `kind=new_mission`) + push ke semua
+    pengguna aktif — tanpa fan-out ribuan baris notifikasi.
+  - *Streak reminder* — `services/streak_reminder.py`: target jujur =
+    user aktif **kemarin**, belum aktif hari ini, streak ≥2 ("streak N
+    hari-mu bisa putus"). Idempoten per hari via `app_settings`
+    (`streak_reminder_last_run`) sehingga aman dipanggil scheduler in-process
+    (`services/scheduler.py`, nyala di lifespan, interval
+    `SCHEDULER_INTERVAL_MINUTES` setelah `STREAK_REMINDER_HOUR`) ATAU
+    endpoint admin (`force` utk demo) — dan aman multi-worker.
+- **Composer push** (`services/broadcast.py`, `api/admin_push.py`):
+  segmen = filter murni atas data `users` (`is_active` selalu; `aktif_7hari`
+  & `pasif_7hari` dari `last_active_date` — sumber streak Sprint 5;
+  `bertoken` = EXISTS `fcm_tokens`). Push dikirim per batch 500, paralel
+  best-effort. Audit dua lapis: middleware request + rekap eksplisit
+  (`push.broadcast`: segment/recipients/tokens/sent) yang bisa dibaca
+  `GET /v1/audit-logs` dan riwayat komposer.
+- **Rate limit global** (`middleware/rate_limit.py`): per IP (hop pertama
+  `X-Forwarded-For`), fixed window 60 dtk Redis, hanya path `/v1/*`, 429 +
+  `Retry-After`. **Fail-open** (pelindung anti-flood — ketersediaan); lapisan
+  spesifik tetap bekerja sendiri: login fail-open (Sprint 1), kuota scan
+  fail-closed (Sprint 2, pelindung budget LLM nyata).
+- **Security header** (`middleware/security_headers.py`): `nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`, CSP `default-src 'none'`,
+  `Permissions-Policy: camera=(self)…` (selaras deklarasi Play Store — PRD
+  §9); HSTS hanya saat `ENVIRONMENT=prod`. Terpasang di middleware paling
+  luar → header hadir juga pada 429/error.
+- **Sentry** (`core/sentry.py`): `SENTRY_DSN` kosong = mati total (nol
+  overhead). `before_send` membuang HTTPException 4xx/503 yang disengaja;
+  `send_default_pii=False` (PRD §9).
+- **Metrik event PRD §8 lengkap** + pembacaannya: `GET
+  /v1/admin/metrics/events` merangkum `analytics_events` (total per nama +
+  bucket harian) — bahan verifikasi target PRD §8 tanpa query manual.
+
 ## Middleware audit log
 
 - Mencatat POST/PUT/PATCH/DELETE (kecuali `/health` dan seluruh `/v1/auth/*` —
@@ -331,10 +382,13 @@ uv run ruff format --check .
 
 # Coverage (gate ≥70% — DoD §1.4); sama dengan `make api-cov`:
 uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
+
+# Smoke E2E lintas alur kritis (Sprint 8; butuh db-up) — sama dengan `make api-smoke`:
+uv run python -m scripts.smoke   # DB terpisah: ekoteologi_smoke, reset+seed otomatis
 ```
 
 > Catatan pengukuran: pytest-cov di lingkungan ini **kekurangan-lapor** sebagian
 > baris body endpoint async (teramati juga pada `auth.py` sejak Sprint 1 —
 > frame setelah `await` di tengah request kadang tidak tercatat oleh ketiga
-> tracer core). Angka yang ditampilkan adalah batas bawah; total tetap 88%
-> (gate 70% lolos), modul Sprint 2 (ledger, llm, quotes, cache, limit) 89–100%.
+> tracer core). Angka yang ditampilkan adalah batas bawah; total tetap di atas
+> gate 70% (Sprint 8: 78%, 276 test), modul inti poin/LLM 89–100%.

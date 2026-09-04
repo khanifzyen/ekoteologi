@@ -10,6 +10,8 @@
 Semua tulisan tercatat audit log via middleware (Sprint 0).
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +28,10 @@ from app.schemas.mission import (
     MissionCreate,
     MissionUpdate,
 )
+from app.services.broadcast import announce_new_mission
 from app.services.missions import MISSION_TYPES, VERIFICATION_MODES
+
+logger = logging.getLogger("ekoteologi.push")
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
@@ -163,6 +168,12 @@ async def create_mission(
     db.add(mission)
     await db.commit()
     await db.refresh(mission)
+    # Event "misi baru" (Sprint 8): broadcast in-app + push FCM best-effort
+    # ke semua pengguna aktif — SETELAH commit misi (gagal push tidak
+    # pernah membatalkan misi yang sudah tersimpan).
+    sent = await announce_new_mission(db, mission)
+    if sent:
+        logger.info("PUSH misi baru id=%s terkirim x%d", mission.id, sent)
     return _admin_out(mission, 0, 0)
 
 

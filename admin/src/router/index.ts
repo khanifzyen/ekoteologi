@@ -45,6 +45,11 @@ const router = createRouter({
           name: 'modules',
           component: () => import('@/views/ModulesView.vue'),
         },
+        {
+          path: 'push',
+          name: 'push',
+          component: () => import('@/views/PushView.vue'),
+        },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },

@@ -24,6 +24,8 @@ api-migrate: ## Terapkan migrasi Alembic
 	cd api && uv run alembic upgrade head
 api-seed: ## Seed data awal (kategori sampah, level, badge) — idempoten
 	cd api && uv run python -m scripts.seed
+api-smoke: ## Smoke E2E lintas alur kritis (butuh db-up; DB ekoteologi_smoke)
+	cd api && uv run python -m scripts.smoke
 api-run: ## Jalankan API lokal (uvicorn, auto-reload)
 	cd api && uv run uvicorn app.main:app --reload --port 8000
 
