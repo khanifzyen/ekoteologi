@@ -122,7 +122,7 @@ Bukti cepat (kriteria demo Sprint 7):
 | APK debug | `cap sync android` + `./gradlew assembleDebug` | ✅ BUILD SUCCESSFUL — `app-debug.apk` 9,9 MB; CI juga memproduksinya |
 | Smoke E2E Sprint 7 | uvicorn lokal (DB `ekoteologi_smoke` bersih, seed 3 modul, mock LLM) + klien httpx | ✅ 13 langkah: daftar modul (3 seed, chip 0/3) → detail tanpa kunci → pelajaran 1 (50%) → pelajaran 2 (modul tuntas: event source=pelajaran + streak) → kuis gagal 1/4 (0 poin, attempt tersimpan) → kuis lulus 4/4 (+20; profil poin=20 streak=1; event source=kuis; notif "Poin kuis masuk") → kuis ulang (0 poin, `already_passed_before`, 3 attempt total poin tetap 20) → daftar ulang (Selesai/Ulangi, chip 1/3) → fallback konten → admin CRUD (slug otomatis, pelajaran, soal lazy, opsi invalid ditolak) → hapus modul berprogres 409 → konten terjadwal tayang dgn aksi hari ini |
 | Anti dobel poin | test + smoke | ✅ 3 attempt: `fail→pass→pass` — total `points_awarded` tetap 20; lulus setelah gagal tetap berhak dapat poin |
-| CI GitHub | run #17 (`1b7f262`, push commit fitur + laporan) | ✅ sukses — api (ruff + 237 pytest + coverage gate), admin (lint+vitest+build), mobile (lint+vitest+build), android-apk (4/4 job) |
+| CI GitHub | run #17 (`2fc9370`, push commit fitur + laporan) | ✅ sukses — api (ruff + 237 pytest + coverage gate), admin (lint+vitest+build), mobile (lint+vitest+build), android-apk (4/4 job) |
 | Verifikasi browser interaktif & perangkat Android nyata | — | ⚠️ Belum di sesi ini (tool browser & perangkat tidak tersedia — item terbuka sejak Sprint 0); UI ditutup unit/component test + typecheck + build + APK; smoke E2E menutup alur di tingkat API |
 
 ---
@@ -193,7 +193,7 @@ Bukti cepat (kriteria demo Sprint 7):
 
 ## 6. DoD Sprint 7 — Checklist
 
-- [x] CI hijau di GitHub: run #17 pada `1b7f262` **success** (4/4 job) — api (ruff +
+- [x] CI hijau di GitHub: run #17 pada `2fc9370` **success** (4/4 job) — api (ruff +
       237 pytest + coverage gate 70%), admin (lint + vitest + build), mobile (lint +
       vitest + build), android-apk + artefak APK. Verifikasi lokal: 237 pytest (coverage
       76,66%), 81+25 vitest, lint bersih, build ketiga app + APK debug.
