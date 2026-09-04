@@ -51,3 +51,25 @@ class MarkReadRequest(BaseModel):
     """Tandai notifikasi dibaca (kosong = semua)."""
 
     ids: list[int] = Field(default_factory=list)
+
+
+# ── Leaderboard MVP (Sprint 6) — backend saja, UI penuh fase 2 (rencana §4) ──
+
+
+class LeaderboardEntry(BaseModel):
+    """Satu baris papan peringkat — PII minimal (nama/kota/avatar saja)."""
+
+    rank: int
+    user_id: str
+    full_name: str
+    avatar_url: str | None = None
+    city: str | None = None
+    points: int
+    level: int
+    level_title: str
+
+
+class LeaderboardResponse(BaseModel):
+    items: list[LeaderboardEntry]
+    me: LeaderboardEntry | None = None  # posisi pemohon (bila di luar jendela)
+    total: int  # jumlah pengguna aktif berpoin (denominator papan)

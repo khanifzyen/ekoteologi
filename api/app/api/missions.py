@@ -7,7 +7,9 @@
                                      poin langsung lewat ledger). Progres
                                      `auto_scan` dihitung dari scan (lihat
                                      `services.missions.apply_scan_progress`).
-- `GET  /v1/badges`                — lencana utk tab Pencapaian (earned flag).
+- `GET  /v1/badges`                — lencana utk tab Pencapaian (badge engine
+                                     Sprint 6: kriteria JSONB dievaluasi lazy
+                                     + on-event di momen poin masuk).
 
 Anti dobel klaim: constraint `UNIQUE(user_id, mission_id, period_date)` +
 periode dihitung server (`services.missions.period_date_for`). Bukti photo
@@ -38,6 +40,7 @@ from app.schemas.mission import (
     WeekSummary,
 )
 from app.services import missions as mission_service
+from app.services.badges import sync_user_badges
 from app.services.ledger import award_points
 from app.services.metrics import EVENT_MISI_SELESAI, track_event
 from app.services.notifications import notify
@@ -320,6 +323,10 @@ async def _claim_manual(
         payload={"mission_id": mission.id, "points": mission.points, "claim_id": claim.id},
     )
     await touch_streak(db, user=user, now=now)
+    # Badge engine (Sprint 6): lencana on-event — misi pertama dkk. langsung
+    # diraih + dinotifikasikan dalam transaksi yang sama (idempoten).
+    for badge in await sync_user_badges(db, user=user):
+        logger.info("BADGE %s earned oleh user=%s (klaim manual)", badge.code, user.id)
 
     try:
         await db.commit()
@@ -421,11 +428,16 @@ async def list_badges(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[BadgeOut]:
-    """Lencana tab Pencapaian — kriteria dievaluasi badge engine (Sprint 6).
+    """Lencana tab Pencapaian — badge engine (Sprint 6).
 
-    Sprint 4 data yang tampil jujur: lencana seed + yang sudah diraih
-    (`user_badges`) — saat ini belum ada mekanisme pemberian otomatis.
+    Lazy evaluation: sebelum daftar dikirim, kriteria JSONB dievaluasi dan
+    lencana yang layak namun belum dimiliki diberikan dulu (idempoten) —
+    sehingga lencana tetap terbayar meski poin masuk lewat jalur lain
+    (penyesuaian admin, dsb.). Lencana baru juga dinotifikasikan di sini.
     """
+    await sync_user_badges(db, user=user)
+    await db.commit()
+
     rows = (
         await db.execute(
             select(Badge, UserBadge.earned_at)

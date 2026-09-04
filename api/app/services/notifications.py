@@ -1,8 +1,9 @@
 """Helper notifikasi in-app (Sprint 5) — tabel `notifications` (PRD §5.9).
 
 Sprint ini: hasil verifikasi misi (approve/reject), misi auto_scan selesai,
-dan bonus streak. Push FCM baru menyusul Sprint 6 (plan Sprint 6); baris
-notifikasi yang sama nanti dipakai sebagai sumber push.
+dan bonus streak. Baris notifikasi ini adalah **sumber push FCM** (Sprint 6):
+`services.push.push_notification()` mem-pipe baris ke pengirim aktif setelah
+commit (mode default `log` sampai kredensial server dipasang).
 """
 
 import uuid

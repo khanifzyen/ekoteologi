@@ -9,16 +9,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import (
+    admin_contents,
     admin_dashboard,
     admin_missions,
     admin_users,
     admin_verification,
     audit,
     auth,
+    content,
     health,
+    leaderboard,
     missions,
     notifications,
     profile,
+    push,
     scan,
     scan_history,
     streak,
@@ -58,9 +62,13 @@ def create_app() -> FastAPI:
     app.include_router(scan_history.router)
     app.include_router(missions.router)
     app.include_router(streak.router)
+    app.include_router(leaderboard.router)
     app.include_router(notifications.router)
+    app.include_router(content.router)
+    app.include_router(push.router)
     app.include_router(admin_missions.router)
     app.include_router(admin_verification.router)
+    app.include_router(admin_contents.router)
     app.include_router(admin_users.router)
     app.include_router(admin_dashboard.router)
     app.include_router(audit.router)

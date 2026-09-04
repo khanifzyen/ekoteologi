@@ -6,6 +6,8 @@ diminta menyarankan quote (kontrak PRD §2.2) namun server selalu menggantinya
 dengan entri bank ini sebelum disimpan/dikirim ke klien.
 """
 
+from datetime import date
+
 from app.schemas.scan import Quote
 
 # Dikurasi manual; sumber ditulis ringkas. Tambahkan lewat PR berikutnya (bukan LLM).
@@ -65,3 +67,14 @@ _FALLBACK = Quote(
 def quote_for_category(category_name: str) -> Quote:
     """Kembalikan quote bank utk kategori; fallback ke kutipan umum."""
     return _QUOTE_BANK.get(category_name.strip().title(), _FALLBACK)
+
+
+def daily_fallback_quote(day: date) -> Quote:
+    """Kutipan "Kutipan Hari Ini" ketika TIDAK ada konten terjadwal (Sprint 6).
+
+    Rotasi deterministik per tanggal atas seluruh bank (termasuk fallback umum):
+    hari sama = kutipan sama di semua server — tanpa randomness, tanpa state.
+    Sumber tetap satu: bank terkurasi ini (satu sumber kebenaran dgn scan).
+    """
+    ordered = list(_QUOTE_BANK.values()) + [_FALLBACK]
+    return ordered[day.timetuple().tm_yday % len(ordered)]

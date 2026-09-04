@@ -40,6 +40,8 @@ Salin `.env.example` → `.env`. Semua via environment, tidak ada yang hardcode.
 | `SCAN_DAILY_LIMIT` | `20` | Kuota scan/user/hari (keputusan §2.1 #2 — default sementara, bisa diubah PO) |
 | `SCAN_IMAGE_MAX_MB` | `5` | Batas ukuran foto scan (JPG/PNG/WebP via magic bytes) |
 | `SCAN_CACHE_TTL_HOURS` / `SCAN_CACHE_SCHEMA` | `24` / `v1` | TTL cache Redis per hash foto; naikkan schema utk menggusur cache lama |
+| `PUSH_MODE` | `log` | Pengirim push (Sprint 6): `log` (dev/test — push dicatat di log, tanpa kredensial) atau `fcm` |
+| `FCM_CREDENTIALS_FILE` / `FCM_PROJECT_ID` | kosong | JSON service account (permission `firebase.messaging`) + project id — wajib utk `PUSH_MODE=fcm`; tanpa keduanya fallback ke log |
 
 ## Struktur
 
@@ -83,7 +85,11 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/notifications` | Bearer | Notifikasi in-app milik user (terbaru dulu) + `unread_count` utk badge. Query: `type?` (mission\|streak\|info\|reward), `unread_only?`, `limit`, `offset` |
 | POST | `/v1/notifications/read` | Bearer | Tandai semua (atau `{ids}` tertentu) notifikasi milik user sebagai dibaca — idempoten |
 | POST | `/v1/notifications/{id}/read` | Bearer | Tandai satu notifikasi dibaca; 404 bila milik user lain |
-| GET | `/v1/badges` | Bearer | Lencana + flag `earned`/`earned_at` milik user (tab Pencapaian; pemberian otomatis = badge engine Sprint 6) |
+| GET | `/v1/badges` | Bearer | Lencana + flag `earned`/`earned_at` milik user (tab Pencapaian). **Badge engine (Sprint 6)**: sebelum daftar dikirim, kriteria JSONB dievaluasi lazy — lencana yang layak diberikan + dinotifikasikan (`type=info`); evaluasi on-event juga jalan di momen poin masuk (scan bernilai poin, approve/klaim manual misi) |
+| GET | `/v1/leaderboard` | Bearer | Papan peringkat MVP (Sprint 6 — backend saja; UI penuh fase 2): top-N `users.points` (index, PRD §5.10 #7) dgn `rank` (window RANK — poin sama = rank sama), `level`/`level_title`, `me` (posisi pemohon walau di luar jendela), `total`. Query: `limit` (1–100, default 20). Hanya pengguna aktif berpoin > 0; PII minimal |
+| GET | `/v1/daily-content` | Bearer | Kartu "Kutipan Hari Ini" `beranda.html` (Sprint 6): konten terjadwal admin hari ini (`daily_contents.publish_date`) atau fallback rotasi bank quote terkurasi (`fallback: true`, tanpa `eco_action`) — selalu 200 |
+| POST | `/v1/push/token` | Bearer | Daftarkan token FCM perangkat `{token, platform?}` → `fcm_tokens` (upsert idempoten; token akun lain berpindah ke akun ini). Token <32 karakter → 400 |
+| DELETE | `/v1/push/token` | Bearer | Hapus token milik sendiri `{token}` (logout/uninstall) — idempoten |
 | GET | `/v1/admin/kpi` | Bearer panel | KPI dashboard read-only → `{users, scans, verification:{pending}, cache:{hit,miss,hit_rate}, llm:{cost_month, tokens_month, budget_monthly}}` — biaya LLM = token bulan berjalan (scan non-cache) × `LLM_COST_PER_1K_TOKENS` |
 | GET | `/v1/admin/charts` | Bearer panel | Data 2 chart dashboard: `daily` (scan/hari `days`=7–30, default 14, hari kosong = 0) & `categories` (7 hari, terbanyak dulu, persentase) |
 | GET | `/v1/admin/missions` | Bearer panel | Daftar misi + rekap klaim (`claims_total`, `claims_pending`). Query: `is_active?`, `verification?`, `q?` (judul), `limit` (1–100), `offset` |
@@ -93,6 +99,10 @@ tests/            # pytest + httpx (DB test terpisah: ekoteologi_test)
 | GET | `/v1/admin/claims` | Bearer panel | Antrian klaim (`user_missions` + user + misi, terbaru dulu) + `user_claims_total` (konteks "Sejarah" layar verifikasi). Query: `status?`, `mission_id?`, `limit`, `offset` |
 | POST | `/v1/admin/claims/{id}/review` | Bearer admin·verifier | Keputusan verifikasi (Sprint 5): `{decision: approved\|rejected, note?}`. Approve → poin misi lewat ledger + notifikasi in-app + event `misi_selesai` + streak user berdetak (satu transaksi). Reject → `note` **wajib** (400 tanpa catatan), tanpa poin. 409 bila klaim sudah direview. Tercatat di audit log |
 | GET | `/v1/admin/users` | Bearer panel | Daftar pengguna (+level dihitung dari `levels`). Query: `q?` (nama/email/kota), `role?`, `status?` (active\|blocked), `limit`, `offset` |
+| GET | `/v1/admin/contents` | Bearer panel | Daftar konten harian (terdekat dulu). Query: `schedule?` (upcoming\|published), `limit`, `offset` |
+| POST | `/v1/admin/contents` | Bearer admin·editor | Jadwalkan konten harian `{publish_date, type: ayat\|hadis\|refleksi, body, title?, source?, eco_action?, image_url?}` → 201. `publish_date` UNIQUE → 409 bila tanggal sudah terisi |
+| PATCH | `/v1/admin/contents/{id}` | Bearer admin·editor | Ubah isi / geser jadwal (deteksi bentrok tanggal → 409) |
+| DELETE | `/v1/admin/contents/{id}` | Bearer admin | Hapus konten |
 | GET | `/uploads/*` | — | File statis (avatar, foto scan, bukti misi) |
 | GET | `/v1/audit-logs` | Bearer admin | Daftar audit log (`limit`≤100, `offset`) |
 | GET | `/v1/audit-logs/count` | Bearer admin | Total baris audit |
@@ -217,8 +227,41 @@ nol di dev karena default `mock`.
   event), pola sama dgn approve verifier.
 - **Notifikasi in-app** (`notifications`, PRD §5.9): hasil verifikasi,
   misi auto_scan selesai, bonus streak, dan poin klaim manual. Endpoint
-  list + tandai dibaca (satu/semua); `unread_count` untuk badge. Push FCM
-  menyusul Sprint 6 (baris yang sama jadi sumber push).
+  list + tandai dibaca (satu/semua); `unread_count` untuk badge. Baris
+  yang sama menjadi sumber push FCM (Sprint 6).
+
+## Gamifikasi & push (Sprint 6)
+
+- **Badge engine** (`services/badges.py`): kriteria JSONB
+  `{"type","value"}` → dievaluasi terhadap statistik user (`scan_count`
+  = scan bernilai poin, `mission_done` = klaim approved, `streak` =
+  rekor `longest_streak`, `points_earned` = SUM ledger, `quiz_passed`
+  = kuis lulus — aktif saat e-learning hidup Sprint 7). Strategi
+  **hybrid on-event + lazy**: `sync_user_badges()` dipanggil di momen
+  poin masuk (scan, approve/klaim manual — notifikasi langsung) DAN di
+  `GET /v1/badges` (backfill; idempoten). Kriteria korup/tidak dikenal →
+  fail-closed (tidak pernah terberi karena data rusak).
+- **Leaderboard MVP** (`GET /v1/leaderboard`): index `users.points`
+  (PRD §5.10 #7), `RANK() OVER (ORDER BY points DESC)` — poin sama =
+  rank sama; `me` selalu tersedia. Backend saja; UI penuh fase 2.
+- **Push FCM** (`services/push.py`, `api/push.py`): token perangkat
+  disimpan di `fcm_tokens` (`POST/DELETE /v1/push/token`). Abstraksi
+  `PushSender`: `LogPushSender` (default — push dicatat di log, tanpa
+  kredensial) & `FcmHttpV1Sender` (kerangka FCM HTTP v1 — aktif bila
+  `PUSH_MODE=fcm` + `FCM_CREDENTIALS_FILE` + `FCM_PROJECT_ID`; fallback
+  otomatis ke log bila konfigurasi kurang). `push_notification()` best-
+  effort setelah commit di review misi — **pengiriman nyata menunggu
+  kredensial service account** (item terbuka, plan §2.2).
+- **Konten harian** (`daily_contents`, PRD §5.6): CRUD admin
+  (`/v1/admin/contents`) — penjadwalan = `publish_date` (UNIQUE, satu
+  konten/hari; tanpa cron, konsisten pola streak). Mobile: `GET
+  /v1/daily-content` → konten hari ini, atau fallback rotasi
+  deterministik bank quote terkurasi (`services/quotes.py`, sumber yang
+  sama dgn scan) — kartu wisdom beranda tidak pernah kosong.
+- **Profil +statistik dampak**: `GET /v1/profile` kini memuat
+  `scans_total` (scan bernilai poin), `missions_approved`, `badges_earned`,
+  `level_progress` (%) — bahan kartu "Pohon Kebaikanmu" beranda & layar
+  profil (tahap pohon dihitung di klien dari angka server).
 
 ## Middleware audit log
 
@@ -235,7 +278,6 @@ nol di dev karena default `mock`.
 (kriteria JSONB `{"type","value"}` — dievaluasi badge engine Sprint 6), dan
 5 `missions` contoh (photo ×2, manual ×2, auto_scan ×1 — Sprint 4; admin bisa
 mengelola lewat CRUD `/v1/admin/missions`).
-
 ## Test
 
 ```bash

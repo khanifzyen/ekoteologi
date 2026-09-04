@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * Profil (Sprint 1/5/6): identitas, statistik dampak (scan, misi, lencana),
+ * progres level, dan grid lencana — data dari `GET /v1/profile` (Sprint 6
+ * menambah `scans_total`/`missions_approved`/`badges_earned`) + `GET /v1/badges`
+ * (badge engine — lencana hidup otomatis dari aksi).
+ */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -7,8 +13,10 @@ import BottomNav from '@/components/layout/BottomNav.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import StateError from '@/components/state/StateError.vue'
 import StateSkeleton from '@/components/state/StateSkeleton.vue'
+import { fetchBadges } from '@/services/missions'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import type { BadgeItem } from '@/types/mission'
 
 const router = useRouter()
 const toast = useToastStore()
@@ -22,6 +30,27 @@ const uploading = ref(false)
 
 const editName = ref('')
 const editCity = ref('')
+
+/** Lencana (Sprint 6) — best-effort: gagal muat tidak memblokir layar profil. */
+const badges = ref<BadgeItem[]>([])
+const badgesLoading = ref(true)
+
+const earnedBadges = computed(() => badges.value.filter((b) => b.earned))
+const badgesEarnedCount = computed(
+  () => auth.profile?.badges_earned ?? earnedBadges.value.length,
+)
+
+/** Total aksi nyata — konsisten dengan kartu "Pohon Kebaikanmu" beranda. */
+const totalActions = computed(
+  () => (auth.profile?.scans_total ?? 0) + (auth.profile?.missions_approved ?? 0),
+)
+
+/** Poin tersisa menuju level berikutnya (null saat sudah level puncak). */
+const levelRemaining = computed(() => {
+  const profile = auth.profile
+  if (!profile || !profile.next_level_points) return null
+  return Math.max(0, profile.next_level_points - profile.points)
+})
 
 const initials = computed(() => {
   const name = auth.user?.full_name ?? ''
@@ -45,9 +74,21 @@ async function load() {
   try {
     await auth.ensureProfile()
     state.value = 'ready'
+    void loadBadges()
   } catch (err) {
     state.value = 'error'
     if (err instanceof ApiError && err.status !== 0) toast.show(err.message)
+  }
+}
+
+async function loadBadges() {
+  badgesLoading.value = true
+  try {
+    badges.value = await fetchBadges()
+  } catch {
+    badges.value = [] // best-effort — grid lencana saja yang kosong
+  } finally {
+    badgesLoading.value = false
   }
 }
 
@@ -186,18 +227,140 @@ function logout() {
 
         <div class="profile-stats">
           <div class="stat">
-            <strong>{{ auth.user?.points ?? 0 }}</strong>
+            <strong data-testid="stat-points">{{ auth.user?.points ?? 0 }}</strong>
             <span>Poin</span>
           </div>
           <div class="stat">
-            <strong>{{ auth.user?.city ?? '—' }}</strong>
-            <span>Kota</span>
+            <strong data-testid="stat-actions">{{ totalActions }}</strong>
+            <span>Aksi Nyata</span>
           </div>
           <div class="stat">
-            <strong>{{ auth.profile?.level ?? 1 }}</strong>
-            <span>Level</span>
+            <strong data-testid="stat-streak">{{ auth.profile?.current_streak ?? 0 }}</strong>
+            <span>Streak</span>
           </div>
         </div>
+
+        <!-- Progres level (Sprint 6 — server menghitung % dari tangga levels) -->
+        <div
+          v-if="levelRemaining !== null"
+          class="level-progress"
+        >
+          <div class="level-row">
+            <span>Lvl {{ auth.profile?.level }} · {{ auth.profile?.level_title }}</span>
+            <strong>{{ levelRemaining }} poin lagi ke {{ auth.profile?.next_level_title }}</strong>
+          </div>
+          <div
+            class="pbar"
+            role="progressbar"
+            :aria-valuenow="auth.profile?.level_progress ?? 0"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-label="`Progres menuju level ${auth.profile?.next_level}`"
+          >
+            <div
+              class="pbar-fill green"
+              :style="{ width: `${auth.profile?.level_progress ?? 0}%` }"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Statistik dampak (Sprint 6 — story "statistik dampak, lencana, poin") -->
+      <div class="card">
+        <div class="section-head tight">
+          <h2>Statistik Dampak</h2>
+        </div>
+        <div class="impact-stats">
+          <div class="impact-stat">
+            <i
+              class="fas fa-camera"
+              aria-hidden="true"
+            />
+            <strong>{{ auth.profile?.scans_total ?? 0 }}</strong>
+            <span>Scan Bernilai</span>
+          </div>
+          <div class="impact-stat">
+            <i
+              class="fas fa-bullseye"
+              aria-hidden="true"
+            />
+            <strong>{{ auth.profile?.missions_approved ?? 0 }}</strong>
+            <span>Misi Selesai</span>
+          </div>
+          <div class="impact-stat">
+            <i
+              class="fas fa-award"
+              aria-hidden="true"
+            />
+            <strong>{{ badgesEarnedCount }}</strong>
+            <span>Lencana</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lencana (Sprint 6 — badge engine; penuh di tab Pencapaian layar Misi) -->
+      <div class="card">
+        <div class="section-head tight">
+          <h2>Lencana</h2>
+          <span
+            v-if="!badgesLoading && badges.length > 0"
+            class="chip chip-green"
+          >
+            {{ earnedBadges.length }}/{{ badges.length }} diraih
+          </span>
+        </div>
+        <div
+          v-if="badgesLoading"
+          class="badge-grid"
+          aria-label="Memuat lencana"
+        >
+          <div
+            v-for="n in 5"
+            :key="n"
+            class="badge-cell"
+          >
+            <div class="badge-medal">
+              <span class="skeleton sk-circle" />
+            </div>
+          </div>
+        </div>
+        <p
+          v-else-if="badges.length === 0"
+          class="badge-empty"
+        >
+          Lencana belum dapat dimuat — buka layar Misi lalu coba lagi.
+        </p>
+        <template v-else>
+          <div class="badge-grid">
+            <div
+              v-for="badge in badges.slice(0, 5)"
+              :key="badge.id"
+              class="badge-cell"
+              :class="{ locked: !badge.earned }"
+              :title="badge.description ?? undefined"
+            >
+              <div class="badge-medal">
+                <i
+                  class="fas"
+                  :class="badge.icon ?? 'fa-award'"
+                  aria-hidden="true"
+                />
+              </div>
+              <span>{{ badge.name ?? badge.code }}</span>
+            </div>
+          </div>
+          <button
+            class="see-all-btn"
+            type="button"
+            @click="router.push({ name: 'misi' })"
+          >
+            Lihat semua lencana
+            <i
+              class="fas fa-angle-right"
+              aria-hidden="true"
+            />
+          </button>
+        </template>
       </div>
 
       <div class="card">
@@ -332,6 +495,120 @@ function logout() {
 .stat span {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+/* Progres level (Sprint 6) */
+.level-progress {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
+.level-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-2);
+}
+.level-row span {
+  color: var(--color-text-muted);
+}
+.level-row strong {
+  color: var(--color-accent-text);
+}
+/* Statistik dampak (Sprint 6) */
+.impact-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-align: center;
+}
+.impact-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.impact-stat i {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.impact-stat strong {
+  font-family: var(--font-heading);
+  font-size: var(--text-md);
+  color: var(--color-primary-strong);
+}
+.impact-stat span {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+/* Grid lencana ringkas (pola tab Pencapaian misi.html) */
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+.badge-cell {
+  text-align: center;
+}
+.badge-medal {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  border: 2px solid transparent;
+}
+.badge-cell.locked .badge-medal {
+  background: var(--surface-alt);
+  color: var(--ink-300);
+  border-color: var(--line);
+}
+.badge-cell.locked span {
+  opacity: 0.75;
+}
+.badge-cell span {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  display: block;
+}
+.badge-cell .sk-circle {
+  width: 100%;
+  height: 100%;
+}
+.badge-empty {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: var(--space-3);
+}
+.see-all-btn {
+  width: 100%;
+  margin-top: var(--space-3);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
 }
 .section-head.tight {
   margin: 0 0 var(--space-3);

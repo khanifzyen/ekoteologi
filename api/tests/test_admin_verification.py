@@ -1,13 +1,17 @@
-"""Test verifikasi admin (Sprint 5) — `POST /v1/admin/claims/{id}/review`.
+"""Test verifikasi admin (Sprint 5, +push Sprint 6) — `POST /v1/admin/claims/{id}/review`.
 
 Loop tertutup: approve → poin lewat ledger + notifikasi + event `misi_selesai`
 + streak; reject → catatan wajib, tanpa poin. Role: admin & verifier saja.
+Sprint 6: notifikasi in-app di-pipe ke push (mode log — tanpa kredensial FCM).
 """
+
+import logging
 
 import pytest
 from sqlalchemy import func, select
 
 from app.models import AnalyticsEvent, Notification, PointTransaction, UserMission
+from app.services.push import register_token
 from tests.conftest import login_token, make_user
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -120,6 +124,24 @@ async def test_approve_menaikkan_streak_pertama(client, admin_user, db_session):
     assert user.current_streak == 1
     assert user.longest_streak == 1
     assert user.last_active_date is not None
+
+
+async def test_approve_memicu_push_ke_token_terdaftar(client, admin_user, db_session, caplog):
+    """Sprint 6: notifikasi approve di-pipe ke push — mode log (tanpa kredensial)."""
+    claim, _mission, user = await _setup_claim(db_session)
+    await register_token(db_session, user_id=user.id, token="F" * 64)
+    await db_session.commit()
+
+    token = await login_token(client, admin_user.email, "password123")
+    with caplog.at_level(logging.INFO, logger="ekoteologi.push"):
+        resp = await client.post(
+            f"/v1/admin/claims/{claim.id}/review",
+            json={"decision": "approved"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 200
+    assert "PUSH (mode=log)" in caplog.text
+    assert "Misi disetujui!" in caplog.text
 
 
 async def test_approve_dua_kali_ditolak_409(client, admin_user, db_session):

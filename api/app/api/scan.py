@@ -25,6 +25,7 @@ from app.core.deps import get_current_user, get_db, get_redis_dep
 from app.models import Scan, User, WasteCategory
 from app.schemas.scan import Quote, ScanCategoryOut, ScanResponse
 from app.services import scan_cache, scan_limit
+from app.services.badges import sync_user_badges
 from app.services.ledger import award_points
 from app.services.llm import LLMError, get_llm_provider
 from app.services.metrics import EVENT_SCAN_PERTAMA, track_event
@@ -207,6 +208,10 @@ async def create_scan(
                 done.mission_id,
                 done.points,
             )
+        # Badge engine (Sprint 6): lencana on-event — notifikasi lencana baru
+        # terkirim di transaksi yang sama dengan poin (idempoten).
+        for badge in await sync_user_badges(db, user=user):
+            logger.info("BADGE %s earned oleh user=%s (scan)", badge.code, user.id)
     else:
         streak_result = None
     await db.commit()

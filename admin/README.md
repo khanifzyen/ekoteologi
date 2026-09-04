@@ -64,6 +64,23 @@ melihat):
   otomatis bila masih ada. State lengkap: skeleton, error + Coba Lagi, dan
   empty "Antrian selesai!".
 
+## Modul Konten Harian (Sprint 6)
+
+**`ContentsView` (`/konten`)** — CRUD `daily_contents` (PRD §5.6) sesuai story
+"Konten harian: CRUD + penjadwalan (admin)":
+
+- **Penjadwalan = `publish_date`** (tanggal tayang; UNIQUE — satu konten per
+  hari, bentrok → 409 dengan pesan tanggal). Konten bertanggal hari ini
+  langsung tayang di kartu "Kutipan Hari Ini" beranda aplikasi; hari tanpa
+  jadwal otomatis menampilkan kutipan bank terkurasi server.
+- **Form panel**: tanggal, tipe (Ayat/Hadis/Refleksi), judul, isi kutipan
+  (wajib), sumber, "Aksi hari ini" (mis. "setor 1 botol ke bank sampah"),
+  URL gambar opsional.
+- **Tabel**: tanggal terdekat dulu, tipe, pratinjau isi + sumber, aksi hari
+  ini, badge status **Tayang/Terjadwal**, ubah (admin·editor) & hapus (admin,
+  confirm + audit log). State lengkap: skeleton, error + Coba Lagi, empty
+  ("Belum ada konten terjadwal…").
+
 ## Perintah
 
 ```bash
@@ -94,8 +111,8 @@ src/
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
 ├── utils/chart.ts      # matematika chart (murni, teruji vitest)
 ├── utils/verification.ts # helper layar verifikasi (murni, teruji vitest)
-└── views/              # LoginView, DashboardView (KPI+chart), UsersView, VerificationView, MissionsView
+└── views/              # LoginView, DashboardView (KPI+chart), UsersView, VerificationView, MissionsView, ContentsView
 ```
 
-Catatan: modul menu lain (E-Learning, Konten Harian, dst.) sengaja nonaktif dengan toast
+Catatan: modul menu lain (E-Learning, dst.) sengaja nonaktif dengan toast
 "menyusul" sesuai peta sprint; item Fase 2 diberi tanda *Segera* seperti mockup.

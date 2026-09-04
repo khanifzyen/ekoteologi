@@ -137,6 +137,40 @@ dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
 - Level di header tetap dari profil — kini dihitung server lewat level engine
   (`services/levels` di API) dan ikut menyesuaikan setelah poin berubah.
 
+## Sprint 6 — beranda final, badge engine, konten harian, push FCM
+
+- **Beranda susunan final** (`HomeView.vue` — 1:1 `beranda.html`): header
+  melengkung kini menampilkan blok **Poin Kebaikan** + avatar + pill level;
+  diikuti StreakCard (Sprint 5), **ImpactCard "Pohon Kebaikanmu"**
+  (tahap Bibit → Tunas → Pohon Muda → Pohon Subur → Pohon Mangga dari total
+  aksi nyata = scan bernilai poin + misi disetujui — angka server, teks di
+  `utils/impact.ts` teruji vitest), **WisdomCard "Kutipan Hari Ini"** (dari
+  `GET /v1/daily-content`; tombol Bagikan memakai Web Share API, fallback =
+  salin ke clipboard + toast), seksi **Misi Hari Ini** (maks. 2 mini misi —
+  auto_scan berjalan & misi bisa diklaim, diurutkan; `utils/home.ts` teruji),
+  dan **Menu Utama** lengkap (Scan "AR" span-2, E-Learning "Segera hadir",
+  Misi dgn badge hasil verifikasi baru, Komunitas toast Fase 2, Riwayat
+  dgn hitungan). Setiap widget best-effort: skeleton sendiri, hilang bila
+  API-nya gagal — satu widget mati tidak memblokir beranda.
+- **Badge engine hidup**: tab Pencapaian layar Misi kini menampilkan lencana
+  yang diraih **otomatis** dari aksi (scan pertama, misi, streak, poin —
+  server mengevaluasi kriteria JSONB; lencana baru dinotifikasikan `type=info`).
+- **Profil** (Sprint 6): statistik **Statistik Dampak** (Scan Bernilai /
+  Misi Selesai / Lencana), bar **progres level** ("% menuju <level>"; server
+  menghitung `level_progress`), grid 5 lencana (terrahiri & terkunci) + tautan
+  ke tab Pencapaian.
+- **Konten harian**: `services/dailyContent.ts` memanggil `GET
+  /v1/daily-content` — konten terjadwal admin (ayat/hadis/refleksi + "Aksi
+  hari ini") atau fallback bank quote terkurasi server (`fallback: true`,
+  tanpa aksi). Label tipe & teks bagikan di `utils/daily.ts` (teruji).
+- **Push FCM** (`services/push.ts` + `@capacitor/push-notifications`):
+  saat berjalan di perangkat native, izin notifikasi diminta sekali per sesi
+  dan token hasil registrasi dikirim ke `POST /v1/push/token` (hapus via
+  `DELETE` saat logout — belum dipasang; logout MVP tidak menghapus token,
+  catatan Sprint 7). Di browser (dev web) pendaftaran di-skip tanpa error —
+  FCM butuh build native; pengiriman pesan nyata menunggu kredensial server
+  (item terbuka Sprint 6).
+
 ## Struktur & catatan
 
 - `capacitor.config.ts` — appId `id.ekoteologi.app`, `webDir: dist`, `androidScheme: https`.
@@ -150,18 +184,24 @@ dipetakan `describeClaimError` (409 dobel/periode, 400 consent/mode, 413 ukuran,
   dipakai layar Scan dan alur unggah bukti misi (Sprint 4).
 - `src/components/missions/MissionCard.vue` — kartu misi 4 keadaan (teruji vitest).
 - `src/components/home/StreakCard.vue` — kartu streak + kalender 7 hari (Sprint 5).
+- `src/components/home/ImpactCard.vue` + `WisdomCard.vue` — kartu dampak &
+  kutipan harian beranda (Sprint 6).
 - `src/components/layout/BottomNav.vue` — nav bawah + FAB bersama (FAB → `/scan`,
   Misi → `/misi` aktif sejak Sprint 4).
-- `src/views/`: OnboardingView, AuthView, HomeView (menu scan/riwayat/misi +
-  StreakCard + badge hasil verifikasi), ScanView (signature, Sprint 3),
+- `src/views/`: OnboardingView, AuthView, HomeView (susunan final Sprint 6),
+  ScanView (signature, Sprint 3),
   HistoryView (riwayat + filter, Sprint 3),
-  MissionsView (misi + lencana + klaim photo/manual, Sprint 4–5), ProfileView.
+  MissionsView (misi + lencana + klaim photo/manual, Sprint 4–5), ProfileView
+  (statistik dampak + lencana + progres level, Sprint 6).
 - `src/services/`: `camera.ts` (getUserMedia + capture JPEG + torch + galeri),
   `scan.ts` (endpoint `/v1/scan*`), `missions.ts` (endpoint `/v1/missions*`,
   `/v1/badges`), `streak.ts` (`GET /v1/streak`), `notifications.ts`
-  (`/v1/notifications*`). `src/utils/` — `scan.ts`, `missions.ts` (keadaan
-  kartu, peta error klaim, progres), `streak.ts` (judul/hint/kalender —
-  teruji vitest), `datetime.ts`, `consent.ts`.
+  (`/v1/notifications*`), `dailyContent.ts` (`GET /v1/daily-content`),
+  `push.ts` (registrasi token FCM — native saja). `src/utils/` —
+  `scan.ts`, `missions.ts` (keadaan kartu, peta error klaim, progres),
+  `streak.ts` (judul/hint/kalender), `impact.ts` (tahap pohon),
+  `home.ts` (pemilihan mini misi), `daily.ts` (label tipe & share text),
+  `datetime.ts`, `consent.ts` — sebagian besar teruji vitest.
 - `src/stores/auth.ts` — sesi Pinia (login/daftar/refresh/profil/avatar/logout
   + `applyPoints`, `addPoints`, `refreshProfile`).
 - Test: `npm test` (vitest + happy-dom) — unit helper `src/utils` + component

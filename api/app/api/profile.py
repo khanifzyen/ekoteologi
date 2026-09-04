@@ -3,20 +3,23 @@
 Avatar disimpan di `UPLOAD_DIR` (default `var/uploads`) dan dilayani statis di
 `/uploads`. Di produksi direktori ini harus di-mount sebagai volume.
 Level dihitung `services.levels.resolve_level` (PRD §5.10 #2) — tidak disimpan.
+Sprint 6: +statistik dampak (scan, misi approved, lencana) utk kartu dampak
+`beranda.html` dan layar profil — `services.badges.collect_stats`.
 """
 
 import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.deps import get_current_user, get_db
-from app.models import Level, User
+from app.models import Level, User, UserBadge
 from app.schemas.profile import ProfileResponse, ProfileUpdate
-from app.services.levels import resolve_level
+from app.services.badges import collect_stats
+from app.services.levels import level_progress_percent, resolve_level
 
 router = APIRouter(prefix="/v1/profile", tags=["profile"])
 
@@ -33,8 +36,9 @@ async def _level_ladder(db: AsyncSession) -> list[Level]:
     return list((await db.scalars(select(Level).order_by(Level.min_points.asc()))).all())
 
 
-def _to_response(user: User, levels: list[Level]) -> ProfileResponse:
+async def _to_response(db: AsyncSession, user: User, levels: list[Level]) -> ProfileResponse:
     resolved = resolve_level(levels, user.points)
+    stats = await collect_stats(db, user)
     return ProfileResponse(
         id=str(user.id),
         email=user.email,
@@ -50,6 +54,15 @@ def _to_response(user: User, levels: list[Level]) -> ProfileResponse:
         next_level_points=resolved.next_min_points,
         current_streak=user.current_streak,
         longest_streak=user.longest_streak,
+        level_progress=level_progress_percent(levels, user.points),
+        scans_total=stats.scan_count,
+        missions_approved=stats.mission_done,
+        badges_earned=int(
+            await db.scalar(
+                select(func.count()).select_from(UserBadge).where(UserBadge.user_id == user.id)
+            )
+            or 0
+        ),
     )
 
 
@@ -57,7 +70,7 @@ def _to_response(user: User, levels: list[Level]) -> ProfileResponse:
 async def get_profile(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> ProfileResponse:
-    return _to_response(user, await _level_ladder(db))
+    return await _to_response(db, user, await _level_ladder(db))
 
 
 @router.patch("", response_model=ProfileResponse)
@@ -74,7 +87,7 @@ async def update_profile(
         user.avatar_url = payload.avatar_url or None
     await db.commit()
     await db.refresh(user)
-    return _to_response(user, await _level_ladder(db))
+    return await _to_response(db, user, await _level_ladder(db))
 
 
 def _detect_ext(data: bytes) -> str | None:
@@ -122,4 +135,4 @@ async def upload_avatar(
     user.avatar_url = f"/uploads/avatars/{filename}"
     await db.commit()
     await db.refresh(user)
-    return _to_response(user, await _level_ladder(db))
+    return await _to_response(db, user, await _level_ladder(db))

@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     llm_cost_per_1k_tokens: float = 0.0
     llm_budget_monthly: float = 0.0
 
+    # ── Push FCM (Sprint 6) ──
+    # `push_mode=log` (default): push dicatat di log — tanpa kredensial (dev/test).
+    # `push_mode=fcm`: kirim via FCM HTTP v1 — wajib file kredensial service
+    # account + project id; tanpa keduanya otomatis fallback ke log (fail-safe).
+    # Kredensial asli masih item terbuka (prasyarat akun GCP — plan §2.2).
+    push_mode: str = "log"  # log | fcm
+    fcm_credentials_file: str = ""  # path JSON service account
+    fcm_project_id: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

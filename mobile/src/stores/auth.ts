@@ -28,6 +28,12 @@ export interface ProfileData extends MobileUser {
   next_level_points?: number | null
   current_streak?: number
   longest_streak?: number
+  /** Sprint 6: statistik dampak — kartu "Pohon Kebaikanmu" & layar profil. */
+  scans_total?: number
+  missions_approved?: number
+  badges_earned?: number
+  /** % progres di level berjalan (null saat puncak). */
+  level_progress?: number | null
 }
 
 const ACCESS_KEY = 'ekoteologi_access'

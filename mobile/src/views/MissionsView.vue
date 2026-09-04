@@ -405,7 +405,8 @@ async function submitClaim() {
           class="fas fa-circle-info"
           aria-hidden="true"
         />
-        Lencana diraih otomatis dari aksimu — mulai aktif di pembaruan berikutnya.
+        Lencana diraih otomatis dari aksimu — scan, misi, streak, dan poin. Cek
+        notifikasi saat ada lencana baru!
       </p>
     </section>
   </main>

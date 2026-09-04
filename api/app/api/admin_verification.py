@@ -22,9 +22,11 @@ from app.schemas.mission import (
     ClaimReviewRequest,
     ClaimUserBrief,
 )
+from app.services.badges import sync_user_badges
 from app.services.ledger import award_points
 from app.services.metrics import EVENT_MISI_SELESAI, track_event
 from app.services.notifications import notify
+from app.services.push import push_notification
 from app.services.streak import touch_streak
 
 logger = logging.getLogger("ekoteologi.verification")
@@ -107,6 +109,7 @@ async def review_claim(
 
     note = payload.note.strip() if payload.note else ""
     now = datetime.now().astimezone()
+    push_source = None
 
     if payload.decision == "rejected":
         if not note:
@@ -118,7 +121,7 @@ async def review_claim(
         claim.review_note = note
         claim.reviewed_by = reviewer.id
         claim.reviewed_at = now
-        notify(
+        push_source = notify(
             db,
             user_id=claim.user_id,
             title="Misi perlu diperbaiki",
@@ -145,7 +148,7 @@ async def review_claim(
             ref_id=claim.id,
             note=f"Misi: {mission.title}",
         )
-        notify(
+        push_source = notify(
             db,
             user_id=claim.user_id,
             title="Misi disetujui!",
@@ -166,10 +169,21 @@ async def review_claim(
         )
         # Menyetujui misi = aktivitas user hari ini (idempoten per hari).
         await touch_streak(db, user=claim_user, now=now)
+        # Badge engine (Sprint 6): lencana on-event — misi pertama dkk.
+        # diraih + dinotifikasikan dalam transaksi yang sama (idempoten).
+        for badge in await sync_user_badges(db, user=claim_user):
+            logger.info("BADGE %s earned oleh user=%s (approve misi)", badge.code, claim_user.id)
         outcome = "approved"
 
     await db.commit()
     await db.refresh(claim)
+    # Push FCM (Sprint 6) — notifikasi in-app adalah sumber push: dikirim best-
+    # effort SETELAH commit (gagal push tidak pernah menggagalkan verifikasi).
+    # Mode default "log" — pengiriman nyata menunggu kredensial server.
+    if push_source is not None:
+        sent = await push_notification(db, push_source)
+        if sent:
+            logger.info("PUSH terkirim x%d utk notifikasi klaim=%s", sent, claim.id)
     logger.info(
         "VERIFIKASI %s claim=%s mission=%s reviewer=%s user=%s points=%d",
         outcome.upper(),
