@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Pengguna — Admin Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar" id="sidebar" aria-label="Navigasi admin">
+    <div class="brand">
+      <div class="mark"><i class="fas fa-seedling" aria-hidden="true"></i></div>
+      <div><strong>Ekoteologi AR</strong><span>Panel Admin</span></div>
+    </div>
+    <nav class="nav">
+      <a href="index.html"><i class="fas fa-gauge-high" aria-hidden="true"></i> Dashboard</a>
+      <a href="pengguna.html" class="active" aria-current="page"><i class="fas fa-users" aria-hidden="true"></i> Pengguna</a>
+      <a href="verifikasi.html"><i class="fas fa-clipboard-check" aria-hidden="true"></i> Verifikasi Misi <span class="count">23</span></a>
+      <a href="#" onclick="toast('Modul Misi (pola sama — belum dimockup)');return false;"><i class="fas fa-bullseye" aria-hidden="true"></i> Misi</a>
+      <a href="#" onclick="toast('Modul E-Learning (pola sama — belum dimockup)');return false;"><i class="fas fa-book-open" aria-hidden="true"></i> E-Learning</a>
+      <a href="#" onclick="toast('Modul Konten Harian (pola sama — belum dimockup)');return false;"><i class="fas fa-calendar-day" aria-hidden="true"></i> Konten Harian</a>
+      <div class="nav-label">Sistem</div>
+      <a href="#" onclick="toast('Composer Push (pola sama — belum dimockup)');return false;"><i class="fas fa-bell" aria-hidden="true"></i> Push Notifikasi</a>
+      <a href="#" onclick="toast('Audit Log (pola sama — belum dimockup)');return false;"><i class="fas fa-list-check" aria-hidden="true"></i> Audit Log</a>
+      <a href="#" onclick="toast('Laporan (pola sama — belum dimockup)');return false;"><i class="fas fa-file-csv" aria-hidden="true"></i> Laporan</a>
+    </nav>
+    <div class="side-user">
+      <img src="https://i.pravatar.cc/72?img=13" alt="" width="36" height="36">
+      <div class="who"><strong>Ust. Farid</strong><span>Administrator</span></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Keluar (demo)')" aria-label="Keluar"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i></button>
+    </div>
+  </aside>
+  <div class="drawer-overlay" id="overlay" onclick="toggleDrawer(false)"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" type="button" onclick="toggleDrawer(true)" aria-label="Buka menu navigasi"><i class="fas fa-bars" aria-hidden="true"></i></button>
+      <div class="search">
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" placeholder="Cari nama, email, kota…" aria-label="Cari pengguna">
+      </div>
+      <div class="top-right">
+        <button class="top-icon" type="button" onclick="toast('3 notifikasi baru (demo)')" aria-label="Notifikasi"><i class="fas fa-bell" aria-hidden="true"></i><span class="dot" aria-hidden="true"></span></button>
+        <img class="top-avatar" src="https://i.pravatar.cc/72?img=13" alt="Avatar Ust. Farid" width="36" height="36">
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Manajemen Pengguna</h1>
+          <p>4.512 pengguna terdaftar · 2.847 aktif 7 hari terakhir</p>
+        </div>
+        <button class="btn btn-outline" type="button" onclick="toast('Export daftar pengguna CSV (demo)')"><i class="fas fa-download" aria-hidden="true"></i> Export CSV</button>
+      </div>
+
+      <div class="panel">
+        <div class="filters" role="group" aria-label="Filter pengguna">
+          <button class="f-chip on" onclick="filterChip(this)">Semua</button>
+          <button class="f-chip" onclick="filterChip(this)"><i class="fas fa-user" aria-hidden="true"></i> User</button>
+          <button class="f-chip" onclick="filterChip(this)"><i class="fas fa-clipboard-check" aria-hidden="true"></i> Verifier</button>
+          <button class="f-chip" onclick="filterChip(this)"><i class="fas fa-pen-nib" aria-hidden="true"></i> Editor</button>
+          <button class="f-chip" onclick="filterChip(this)"><i class="fas fa-shield-halved" aria-hidden="true"></i> Admin</button>
+          <span style="flex:1"></span>
+          <button class="f-chip" onclick="filterChip(this)"><i class="fas fa-circle-half-stroke" aria-hidden="true"></i> Nonaktif</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Pengguna</th><th>Kota</th><th>Poin</th><th>Level</th><th>Role</th><th>Status</th><th>Terdaftar</th><th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=47" alt="" width="34" height="34" loading="lazy"><div><strong>Aisyah Rahma</strong><span>aisyah@mail.com</span></div></div></td>
+                <td data-label="Kota">Jakarta</td>
+                <td data-label="Poin"><strong class="num">1.250</strong></td>
+                <td data-label="Level">Lv 3 · Pejuang Bumi</td>
+                <td data-label="Role"><span class="badge badge-user">User</span></td>
+                <td data-label="Status"><span class="badge badge-active"><i class="fas fa-circle" aria-hidden="true"></i> Aktif</span></td>
+                <td data-label="Terdaftar" class="num">12 Agu 2026</td>
+                <td data-label="Aksi"><button class="btn btn-outline btn-sm" onclick="toast('Buka drawer detail pengguna (demo)')">Detail</button></td>
+              </tr>
+              <tr>
+                <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=32" alt="" width="34" height="34" loading="lazy"><div><strong>Dewi Lestari</strong><span>dewi.l@mail.com</span></div></div></td>
+                <td data-label="Kota">Bogor</td>
+                <td data-label="Poin"><strong class="num">840</strong></td>
+                <td data-label="Level">Lv 2 · Kawan Bumi</td>
+                <td data-label="Role"><span class="badge badge-user">User</span></td>
+                <td data-label="Status"><span class="badge badge-active"><i class="fas fa-circle" aria-hidden="true"></i> Aktif</span></td>
+                <td data-label="Terdaftar" class="num">2 Sep 2026</td>
+                <td data-label="Aksi"><button class="btn btn-outline btn-sm" onclick="toast('Buka drawer detail pengguna (demo)')">Detail</button></td>
+              </tr>
+              <tr>
+                <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=59" alt="" width="34" height="34" loading="lazy"><div><strong>Hasan Basri</strong><span>hasan.b@mail.com</span></div></div></td>
+                <td data-label="Kota">Bandung</td>
+                <td data-label="Poin"><strong class="num">3.410</strong></td>
+                <td data-label="Level">Lv 5 · Penjaga Bumi</td>
+                <td data-label="Role"><span class="badge badge-verifier">Verifier</span></td>
+                <td data-label="Status"><span class="badge badge-active"><i class="fas fa-circle" aria-hidden="true"></i> Aktif</span></td>
+                <td data-label="Terdaftar" class="num">20 Jul 2026</td>
+                <td data-label="Aksi"><button class="btn btn-outline btn-sm" onclick="toast('Buka drawer detail pengguna (demo)')">Detail</button></td>
+              </tr>
+              <tr>
+                <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=5" alt="" width="34" height="34" loading="lazy"><div><strong>Budi Santoso</strong><span>budi.s@mail.com</span></div></div></td>
+                <td data-label="Kota">Surabaya</td>
+                <td data-label="Poin"><strong class="num">95</strong></td>
+                <td data-label="Level">Lv 1 · Tunas Hijau</td>
+                <td data-label="Role"><span class="badge badge-user">User</span></td>
+                <td data-label="Status"><span class="badge badge-blocked"><i class="fas fa-ban" aria-hidden="true"></i> Diblokir</span></td>
+                <td data-label="Terdaftar" class="num">15 Agu 2026</td>
+                <td data-label="Aksi">
+                  <div style="display:flex; gap: var(--space-2);">
+                    <button class="btn btn-outline btn-sm" onclick="toast('Buka drawer detail pengguna (demo)')">Detail</button>
+                    <button class="btn btn-primary btn-sm" onclick="blockUser('Budi Santoso')">Blokir</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=44" alt="" width="34" height="34" loading="lazy"><div><strong>Umi Kalsum</strong><span>umi.k@mail.com</span></div></div></td>
+                <td data-label="Kota">Yogyakarta</td>
+                <td data-label="Poin"><strong class="num">2.180</strong></td>
+                <td data-label="Level">Lv 4 · Sahabat Bumi</td>
+                <td data-label="Role"><span class="badge badge-editor">Editor</span></td>
+                <td data-label="Status"><span class="badge badge-active"><i class="fas fa-circle" aria-hidden="true"></i> Aktif</span></td>
+                <td data-label="Terdaftar" class="num">28 Jun 2026</td>
+                <td data-label="Aksi"><button class="btn btn-outline btn-sm" onclick="toast('Buka drawer detail pengguna (demo)')">Detail</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-foot">
+          <span>Menampilkan 1–5 dari 4.512 pengguna</span>
+          <div class="pager" role="navigation" aria-label="Halaman">
+            <button aria-label="Sebelumnya"><i class="fas fa-angle-left" aria-hidden="true"></i></button>
+            <button class="on" aria-current="page">1</button>
+            <button onclick="toast('Halaman 2 (demo)')">2</button>
+            <button onclick="toast('Halaman 3 (demo)')">3</button>
+            <button onclick="toast('Halaman berikutnya (demo)')" aria-label="Berikutnya"><i class="fas fa-angle-right" aria-hidden="true"></i></button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function toggleDrawer(open){
+    document.getElementById('sidebar').classList.toggle('open', open);
+    document.getElementById('overlay').classList.toggle('show', open);
+  }
+  function filterChip(btn){
+    btn.closest('.filters').querySelectorAll('.f-chip').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    toast('Filter diterapkan: ' + btn.textContent.trim() + ' (demo)');
+  }
+  function blockUser(name){
+    if (confirm('Blokir ' + name + '? Pengguna tidak dapat masuk sampai diblokir untuk dibuka kembali. Tindakan ini tercatat di audit log.')) {
+      toast(name + ' diblokir · tercatat di audit log (demo)');
+    }
+  }
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

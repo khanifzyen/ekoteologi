@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Beranda — Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  /* ── Header home ── */
+  .home-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
+  .h-greet h1 { color: var(--color-on-dark); font-size: var(--text-lg); }
+  .h-greet p { color: color-mix(in srgb, var(--color-on-dark) 82%, transparent); font-size: var(--text-xs); }
+  .h-right { display: flex; align-items: center; gap: var(--space-3); }
+  .avatar { width: 46px; height: 46px; border-radius: 50%; overflow: hidden; border: 2px solid var(--gold); flex: none; background: var(--color-surface); }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .points { text-align: right; }
+  .points strong { display: block; font-family: var(--font-heading); font-weight: 800; font-size: var(--text-xl); color: var(--gold-light); line-height: 1.1; }
+  .points span { font-size: var(--text-xs); color: color-mix(in srgb, var(--color-on-dark) 80%, transparent); }
+  .level-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: color-mix(in srgb, var(--color-surface) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-surface) 35%, transparent);
+    color: var(--color-on-dark);
+    padding: 4px 12px; border-radius: var(--radius-pill);
+    font-size: var(--text-xs); font-weight: 700;
+  }
+  .level-badge i { color: var(--gold-light); }
+
+  /* ── Streak strip ── */
+  .streak-card { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .streak-flame {
+    width: 44px; height: 44px; flex: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--gold) 25%, var(--color-surface));
+    color: var(--color-accent-text);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .streak-info { flex: 1; }
+  .streak-info strong { font-family: var(--font-heading); font-size: var(--text-sm); }
+  .streak-info p { font-size: var(--text-xs); color: var(--color-text-muted); }
+  .streak-days { display: flex; gap: 4px; }
+  .streak-days span {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--color-primary-soft); color: var(--color-primary-strong);
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .streak-days span.on { background: var(--color-accent); color: var(--color-accent-fg); }
+  .streak-days span.today { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+  /* ── Kartu dampak / pohon ── */
+  .impact-card { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .tree-visual {
+    width: 64px; height: 64px; flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--color-primary-soft), var(--color-bg));
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-primary); font-size: 28px;
+    border: 1px solid var(--color-border);
+  }
+  .impact-info { flex: 1; }
+  .impact-info h3 { font-size: var(--text-md); margin-bottom: 2px; }
+  .impact-info p { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-2); }
+  .impact-info .pbar { margin-top: 2px; }
+  .impact-count { text-align: center; flex: none; }
+  .impact-count strong { display: block; font-family: var(--font-heading); font-weight: 800; font-size: var(--text-lg); color: var(--color-primary-strong); }
+  .impact-count span { font-size: 10px; color: var(--color-text-muted); }
+
+  /* ── Konten harian (wisdom) ── */
+  .wisdom { position: relative; overflow: hidden; margin-bottom: var(--space-4); }
+  .wisdom::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(color-mix(in srgb, var(--color-primary) 55%, transparent) 1px, transparent 1px);
+    background-size: 18px 18px;
+    opacity: 0.12;
+    pointer-events: none;
+  }
+  .wisdom-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-primary); font-weight: 700; margin-bottom: 6px; }
+  .wisdom blockquote { font-family: var(--font-arabic); font-style: italic; color: var(--color-heading); font-size: var(--text-md); line-height: 1.6; margin-bottom: 4px; }
+  .wisdom cite { font-style: normal; font-size: var(--text-xs); color: var(--color-text-muted); display: block; margin-bottom: var(--space-3); }
+  .wisdom-action {
+    border-top: 1px dashed var(--color-border-strong);
+    padding-top: var(--space-3);
+    display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
+  }
+  .wisdom-action p { font-size: var(--text-xs); color: var(--color-text-muted); }
+  .wisdom-action p strong { color: var(--color-accent-text); }
+  .share-btn {
+    border: none; background: none; cursor: pointer;
+    color: var(--color-primary); font-weight: 700; font-size: var(--text-xs);
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 44px;
+  }
+
+  /* ── Menu grid ── */
+  .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .menu-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-1);
+    padding: var(--space-4);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    min-height: 108px;
+    text-align: center; text-decoration: none;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: transform var(--dur-fast) var(--ease-out);
+    font-family: var(--font-body);
+  }
+  .menu-card:hover { transform: translateY(-2px); }
+  .menu-card:active { transform: scale(0.96); }
+  .menu-card i { font-size: 24px; color: var(--color-primary); }
+  .menu-card strong { font-size: var(--text-sm); font-weight: 700; color: var(--color-text); font-family: var(--font-heading); }
+  .menu-card span { font-size: 10px; color: var(--color-text-muted); }
+  .menu-ar {
+    grid-column: span 2;
+    background: var(--color-header-grad);
+    border-color: var(--color-surface);
+    box-shadow: var(--shadow-2);
+  }
+  .menu-ar i { color: var(--gold-light); font-size: 28px; }
+  .menu-ar strong { color: var(--color-on-dark); font-size: var(--text-md); }
+  .menu-ar span { color: color-mix(in srgb, var(--color-on-dark) 80%, transparent); }
+
+  /* ── Misi mini di home ── */
+  .mini-mission { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+  .mini-mission:last-child { border-bottom: none; padding-bottom: 0; }
+  .mm-icon {
+    width: 42px; height: 42px; flex: none;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary-soft); color: var(--color-primary);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .mm-info { flex: 1; min-width: 0; }
+  .mm-info strong { font-size: var(--text-sm); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mm-info .pbar { margin-top: 6px; height: 6px; }
+  .mm-points { flex: none; text-align: right; }
+  .mm-points strong { font-family: var(--font-heading); color: var(--color-accent-text); font-size: var(--text-sm); }
+  .mm-points span { display: block; font-size: 10px; color: var(--color-text-muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="offline-bar" id="offBar" role="status"><i class="fas fa-wifi" aria-hidden="true"></i> Mode offline — beberapa fitur terbatas.</div>
+
+  <div class="demo-bar">
+    <strong>Mockup:</strong> state
+    <button class="chip-btn on" onclick="setState('', this)">Normal</button>
+    <button class="chip-btn" onclick="setState('loading', this)">Loading</button>
+    <button class="chip-btn" onclick="setState('empty', this)">Empty</button>
+    <button class="chip-btn" onclick="setState('offline', this)">Offline</button>
+  </div>
+
+  <!-- Header melengkung -->
+  <header class="header-curved">
+    <div class="home-top">
+      <div class="h-greet">
+        <h1>Assalamu'alaikum, Aisyah</h1>
+        <p>Mari pilah sampah hari ini</p>
+      </div>
+      <div class="h-right">
+        <div class="points">
+          <strong>1.250</strong>
+          <span>Poin Kebaikan</span>
+        </div>
+        <div class="avatar"><img src="https://i.pravatar.cc/100?img=47" alt="Foto profil Aisyah" width="46" height="46"></div>
+      </div>
+    </div>
+    <span class="level-badge"><i class="fas fa-seedling" aria-hidden="true"></i> Level 3 · Pejuang Bumi</span>
+  </header>
+
+  <main class="content-overlap">
+    <!-- Streak -->
+    <div class="card streak-card" id="streakCard">
+      <div class="streak-flame" aria-hidden="true"><i class="fas fa-fire"></i></div>
+      <div class="streak-info">
+        <strong>Streak 5 hari!</strong>
+        <p>Jangan putus — misi 1 hari lagi untuk bonus +20 poin.</p>
+      </div>
+      <div class="streak-days" aria-label="Streak 5 hari terakhir">
+        <span class="on">S</span><span class="on">S</span><span class="on">R</span><span class="on">K</span><span class="on">J</span><span class="today">S</span><span>M</span>
+      </div>
+    </div>
+
+    <!-- Kartu dampak -->
+    <div class="card impact-card" id="impactCard">
+      <div class="tree-visual" aria-hidden="true"><i class="fas fa-tree"></i></div>
+      <div class="impact-info">
+        <h3>Pohon Kebaikanmu</h3>
+        <p>Tumbuh menjadi pohon mangga — butuh <strong>2 misi</strong> lagi.</p>
+        <div class="pbar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" aria-label="Progres pohon"><div class="pbar-fill green" style="width:60%"></div></div>
+      </div>
+      <div class="impact-count">
+        <strong>48</strong>
+        <span>aksi nyata</span>
+      </div>
+    </div>
+
+    <!-- Konten harian -->
+    <div class="card wisdom" id="wisdomCard">
+      <div class="wisdom-label">Kutipan Hari Ini</div>
+      <blockquote>"Sesungguhnya Allah itu indah dan menyukai keindahan."</blockquote>
+      <cite>— HR. Muslim</cite>
+      <div class="wisdom-action">
+        <p>Aksi hari ini: <strong>setor 1 botol ke bank sampah</strong></p>
+        <button class="share-btn" type="button" onclick="toast('Bagikan ke WhatsApp (demo)')"><i class="fab fa-whatsapp" aria-hidden="true"></i> Bagikan</button>
+      </div>
+    </div>
+
+    <!-- Misi hari ini -->
+    <div class="section-head">
+      <h2>Misi Hari Ini</h2>
+      <a href="misi.html">Lihat semua <i class="fas fa-angle-right" aria-hidden="true"></i></a>
+    </div>
+    <div class="card" id="miniMissions" style="padding-top: var(--space-2); padding-bottom: var(--space-2);">
+      <div class="mini-mission">
+        <div class="mm-icon" aria-hidden="true"><i class="fas fa-camera"></i></div>
+        <div class="mm-info">
+          <strong>Scan 3 jenis sampah</strong>
+          <div class="pbar"><div class="pbar-fill" style="width:66%"></div></div>
+        </div>
+        <div class="mm-points"><strong>+15</strong><span>2/3</span></div>
+      </div>
+      <div class="mini-mission">
+        <div class="mm-icon" aria-hidden="true"><i class="fas fa-book-open"></i></div>
+        <div class="mm-info">
+          <strong>Baca 1 pelajaran e-learning</strong>
+          <div class="pbar"><div class="pbar-fill" style="width:0%"></div></div>
+        </div>
+        <div class="mm-points"><strong>+10</strong><span>0/1</span></div>
+      </div>
+    </div>
+
+    <!-- Menu utama -->
+    <div class="section-head"><h2>Menu Utama</h2></div>
+    <div class="menu-grid">
+      <a class="menu-card menu-ar" href="scan.html">
+        <i class="fas fa-camera" aria-hidden="true"></i>
+        <strong>Scan Sampah "AR"</strong>
+        <span>Kamera + AI · dapatkan poin</span>
+      </a>
+      <a class="menu-card" href="elearning.html">
+        <i class="fas fa-book-open" aria-hidden="true"></i>
+        <strong>E-Learning</strong>
+        <span>4 modul menantimu</span>
+      </a>
+      <a class="menu-card" href="misi.html">
+        <i class="fas fa-bullseye" aria-hidden="true"></i>
+        <strong>Misi</strong>
+        <span>3 misi hari ini</span>
+      </a>
+      <a class="menu-card" href="#" onclick="toast('Modul Komunitas hadir di Fase 2 (demo)');return false;">
+        <i class="fas fa-map-location-dot" aria-hidden="true"></i>
+        <strong>Komunitas</strong>
+        <span>Segera hadir</span>
+      </a>
+      <a class="menu-card" href="#" onclick="toast('Riwayat scan (demo)');return false;">
+        <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+        <strong>Riwayat Scan</strong>
+        <span>48 scan tercatat</span>
+      </a>
+    </div>
+  </main>
+
+  <!-- Bottom nav + FAB -->
+  <div class="nav-wrap">
+    <button class="fab" type="button" onclick="location.href='scan.html'" aria-label="Buka pemindai sampah">
+      <i class="fas fa-camera" aria-hidden="true"></i>
+    </button>
+    <nav class="bottom-nav" aria-label="Navigasi utama">
+      <a class="nav-item active" href="beranda.html" aria-current="page"><i class="fas fa-home" aria-hidden="true"></i>Beranda</a>
+      <a class="nav-item" href="elearning.html"><i class="fas fa-book-open" aria-hidden="true"></i>Belajar</a>
+      <div class="nav-spacer" aria-hidden="true"></div>
+      <a class="nav-item" href="misi.html"><i class="fas fa-bullseye" aria-hidden="true"></i>Misi</a>
+      <a class="nav-item" href="#" onclick="toast('Halaman Profil (demo)');return false;"><i class="fas fa-user" aria-hidden="true"></i>Profil</a>
+    </nav>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  /* ── State switcher demo ── */
+  const realNodes = ['streakCard','impactCard','wisdomCard','miniMissions'];
+  function setState(state, btn){
+    document.querySelectorAll('.chip-btn').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    document.getElementById('offBar').classList.toggle('show', state==='offline');
+
+    const anchor = document.getElementById('streakCard');
+    document.querySelectorAll('.state-layer').forEach(n=>n.remove());
+
+    if(state==='loading'){
+      realNodes.forEach(id=>{
+        const el=document.getElementById(id); if(!el) return;
+        el.hidden = true;
+        const sk=document.createElement('div');
+        sk.className='card sk-card state-layer';
+        sk.innerHTML='<div class="skeleton sk-circle"></div><div class="sk-lines"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:40%"></div></div>';
+        el.after(sk);
+      });
+    }
+    if(state==='empty'){
+      realNodes.forEach(id=>{ const el=document.getElementById(id); if(el) el.hidden=true; });
+      const emp=document.createElement('div');
+      emp.className='card empty state-layer';
+      emp.innerHTML='<div class="empty-icon"><i class="fas fa-seedling" aria-hidden="true"></i></div><h3>Belum ada aktivitas</h3><p>Mulai scan sampah pertamamu untuk menumbuhkan pohon kebaikan.</p><a class="btn btn-primary" href="scan.html"><i class="fas fa-camera" aria-hidden="true"></i> Mulai Scan</a>';
+      anchor.after(emp);
+    }
+    if(state===''){
+      realNodes.forEach(id=>{ const el=document.getElementById(id); if(el) el.hidden=false; });
+    }
+  }
+
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

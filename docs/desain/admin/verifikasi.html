@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Verifikasi Misi — Admin Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="admin.css">
+<style>
+  .reject-note { margin-top: var(--space-4); }
+  .reject-note label { font-size: var(--text-sm); font-weight: 700; display: block; margin-bottom: 6px; }
+  .reject-note textarea {
+    width: 100%; min-height: 72px; resize: vertical;
+    border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-sm);
+    padding: var(--space-3); font-family: var(--font-body); font-size: var(--text-sm);
+  }
+  .reject-note textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent); }
+  .stage-empty { text-align: center; color: var(--color-text-muted); padding: var(--space-7); }
+  .stage-empty i { font-size: 40px; color: var(--color-success); display: block; margin-bottom: var(--space-3); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="sidebar" id="sidebar" aria-label="Navigasi admin">
+    <div class="brand">
+      <div class="mark"><i class="fas fa-seedling" aria-hidden="true"></i></div>
+      <div><strong>Ekoteologi AR</strong><span>Panel Admin</span></div>
+    </div>
+    <nav class="nav">
+      <a href="index.html"><i class="fas fa-gauge-high" aria-hidden="true"></i> Dashboard</a>
+      <a href="pengguna.html"><i class="fas fa-users" aria-hidden="true"></i> Pengguna</a>
+      <a href="verifikasi.html" class="active" aria-current="page"><i class="fas fa-clipboard-check" aria-hidden="true"></i> Verifikasi Misi <span class="count" id="queueCount">6</span></a>
+      <a href="#" onclick="toast('Modul Misi (pola sama — belum dimockup)');return false;"><i class="fas fa-bullseye" aria-hidden="true"></i> Misi</a>
+      <a href="#" onclick="toast('Modul E-Learning (pola sama — belum dimockup)');return false;"><i class="fas fa-book-open" aria-hidden="true"></i> E-Learning</a>
+      <a href="#" onclick="toast('Modul Konten Harian (pola sama — belum dimockup)');return false;"><i class="fas fa-calendar-day" aria-hidden="true"></i> Konten Harian</a>
+      <div class="nav-label">Sistem</div>
+      <a href="#" onclick="toast('Composer Push (pola sama — belum dimockup)');return false;"><i class="fas fa-bell" aria-hidden="true"></i> Push Notifikasi</a>
+      <a href="#" onclick="toast('Audit Log (pola sama — belum dimockup)');return false;"><i class="fas fa-list-check" aria-hidden="true"></i> Audit Log</a>
+      <a href="#" onclick="toast('Laporan (pola sama — belum dimockup)');return false;"><i class="fas fa-file-csv" aria-hidden="true"></i> Laporan</a>
+    </nav>
+    <div class="side-user">
+      <img src="https://i.pravatar.cc/72?img=13" alt="" width="36" height="36">
+      <div class="who"><strong>Ust. Farid</strong><span>Administrator</span></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Keluar (demo)')" aria-label="Keluar"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i></button>
+    </div>
+  </aside>
+  <div class="drawer-overlay" id="overlay" onclick="toggleDrawer(false)"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" type="button" onclick="toggleDrawer(true)" aria-label="Buka menu navigasi"><i class="fas fa-bars" aria-hidden="true"></i></button>
+      <div class="search">
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" placeholder="Cari misi / pengguna di antrian…" aria-label="Cari di antrian">
+      </div>
+      <div class="top-right">
+        <button class="top-icon" type="button" onclick="toast('3 notifikasi baru (demo)')" aria-label="Notifikasi"><i class="fas fa-bell" aria-hidden="true"></i><span class="dot" aria-hidden="true"></span></button>
+        <img class="top-avatar" src="https://i.pravatar.cc/72?img=13" alt="Avatar Ust. Farid" width="36" height="36">
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Antrian Verifikasi Misi</h1>
+          <p><span class="num" id="queueLeft">6</span> bukti menunggu review · foto hanya dilihat verifier</p>
+        </div>
+        <span class="badge badge-pending"><i class="fas fa-hourglass-half" aria-hidden="true"></i> SLA review: 1×24 jam</span>
+      </div>
+
+      <div class="verif-grid">
+        <!-- Stage: preview bukti -->
+        <div class="panel" style="display:flex; flex-direction:column;">
+          <div class="verif-stage" id="stage">
+            <img id="proofImg" src="https://picsum.photos/seed/ekoteo1/900/640" alt="Foto bukti misi yang diverifikasi" width="900" height="640">
+          </div>
+          <div class="queue-strip" id="queueStrip" aria-label="Antrian berikutnya"></div>
+        </div>
+
+        <!-- Detail & aksi -->
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2 id="mTitle">Setor 1 kg Plastik ke Bank Sampah</h2><div class="sub">Misi mingguan · verifikasi foto · +50 poin</div></div>
+          </div>
+          <div class="panel-body">
+            <dl class="detail-list">
+              <div><dt>Pengguna</dt><dd id="dUser">Dewi Lestari · Bogor</dd></div>
+              <div><dt>Diunggah</dt><dd class="num" id="dTime">Hari ini, 09.12 WIB</dd></div>
+              <div><dt>Catatan user</dt><dd id="dNote">"Sudah disetor ke Bank Sampah Melati"</dd></div>
+              <div><dt>Sejarah</dt><dd id="dHist">Misi ke-3 pengguna ini</dd></div>
+            </dl>
+
+            <div class="reject-note">
+              <label for="reviewNote">Catatan review (wajib bila menolak)</label>
+              <textarea id="reviewNote" placeholder="Contoh: foto tidak menunjukkan timbangan, mohon unggah ulang…"></textarea>
+            </div>
+
+            <div class="verif-actions">
+              <button class="btn btn-success" type="button" onclick="review('approve')"><i class="fas fa-check" aria-hidden="true"></i> Setujui</button>
+              <button class="btn btn-danger" type="button" onclick="review('reject')"><i class="fas fa-xmark" aria-hidden="true"></i> Tolak</button>
+            </div>
+            <div class="kbd-row" aria-hidden="true">
+              <span><span class="kbd">A</span> setujui</span>
+              <span><span class="kbd">R</span> tolak</span>
+              <span><span class="kbd">←</span><span class="kbd">→</span> pindah antrian</span>
+            </div>
+            <p class="hint" style="margin-top: var(--space-3); font-size: var(--text-xs); color: var(--color-text-muted);">Keputusan tercatat di audit log · pengguna menerima notifikasi push hasil review.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const items = [
+    { img:'https://picsum.photos/seed/ekoteo1/900/640', mission:'Setor 1 kg Plastik ke Bank Sampah', sub:'Misi mingguan · verifikasi foto · +50 poin', user:'Dewi Lestari · Bogor', time:'Hari ini, 09.12 WIB', note:'"Sudah disetor ke Bank Sampah Melati"', hist:'Misi ke-3 pengguna ini' },
+    { img:'https://picsum.photos/seed/ekoteo2/900/640', mission:'Pilah Sampah Rumah Tangga', sub:'Misi harian · verifikasi foto · +20 poin', user:'Ahmad Fauzi · Depok', time:'Hari ini, 08.47 WIB', note:'—', hist:'Misi pertama pengguna ini' },
+    { img:'https://picsum.photos/seed/ekoteo3/900/640', mission:'Bersihkan Masjid Bersama', sub:'Misi spesial · verifikasi foto · +30 poin', user:'Aisyah Rahma · Jakarta', time:'Hari ini, 08.02 WIB', note:'"Kegiatan remaja masjid"', hist:'Misi ke-12 pengguna ini' },
+    { img:'https://picsum.photos/seed/ekoteo4/900/640', mission:'Kompos Sampah Dapur', sub:'Misi harian · verifikasi foto · +15 poin', user:'Siti Aminah · Tangerang', time:'Hari ini, 07.15 WIB', note:'—', hist:'Streak 6 hari' },
+    { img:'https://picsum.photos/seed/ekoteo5/900/640', mission:'Tanam Pohon di RT', sub:'Misi spesial · verifikasi foto · +40 poin', user:'Budi Santoso · Surabaya', time:'Kemarin, 21.40 WIB', note:'"Ada 6 peserta"', hist:'Pengguna baru (2 hari)' },
+    { img:'https://picsum.photos/seed/ekoteo6/900/640', mission:'Setor 1 kg Plastik ke Bank Sampah', sub:'Misi mingguan · verifikasi foto · +50 poin', user:'Umi Kalsum · Yogyakarta', time:'Kemarin, 20.05 WIB', note:'—', hist:'Misi ke-8 pengguna ini' },
+  ];
+  let cur = 0;
+
+  const strip = document.getElementById('queueStrip');
+  function renderStrip(){
+    strip.innerHTML = items.map((it,i)=>
+      `<img src="${it.img}" data-i="${i}" loading="lazy" class="${i===cur?'on':''}" alt="Bukti ${i+1}" onclick="jumpTo(${i})" style="${i===cur?'':'filter:grayscale(0.2)'}">`
+    ).join('');
+  }
+  function render(){
+    const it = items[cur];
+    document.getElementById('proofImg').src = it.img;
+    document.getElementById('mTitle').textContent = it.mission;
+    document.querySelector('.panel-head .sub').textContent = it.sub;
+    document.getElementById('dUser').textContent = it.user;
+    document.getElementById('dTime').textContent = it.time;
+    document.getElementById('dNote').textContent = it.note;
+    document.getElementById('dHist').textContent = it.hist;
+    document.getElementById('reviewNote').value = '';
+    renderStrip();
+  }
+  function jumpTo(i){ cur = i; render(); }
+
+  function review(decision){
+    if(decision==='reject' && !document.getElementById('reviewNote').value.trim()){
+      toast('Tuliskan catatan alasan penolakan dulu, ya.');
+      document.getElementById('reviewNote').focus();
+      return;
+    }
+    const it = items[cur];
+    toast(decision==='approve'
+      ? `Disetujui: ${it.user.split('·')[0].trim()} mendapat poin · tercatat di audit log (demo)`
+      : `Ditolak dengan catatan · pengguna dinotifikasikan (demo)`);
+    items.splice(cur,1);
+    if(cur >= items.length) cur = Math.max(0, items.length-1);
+    updateCount();
+    if(items.length === 0){ showEmpty(); return; }
+    render();
+  }
+
+  function updateCount(){
+    const n = items.length;
+    document.getElementById('queueCount').textContent = n + 17; /* sisanya di halaman berikut */
+    document.getElementById('queueLeft').textContent = n;
+  }
+
+  function showEmpty(){
+    document.getElementById('stage').innerHTML =
+      '<div class="stage-empty"><i class="fas fa-circle-check" aria-hidden="true"></i><h3 style="font-size:var(--text-lg);color:var(--color-heading);margin-bottom:4px;">Antrian halaman ini selesai!</h3><p>Sisa 17 bukti ada di halaman berikutnya.</p></div>';
+    document.getElementById('queueStrip').innerHTML = '';
+  }
+
+  /* keyboard: A approve, R reject, ←/→ navigasi */
+  document.addEventListener('keydown', (e)=>{
+    if (e.target.matches('input, textarea')) return;
+    if (e.key === 'a' || e.key === 'A') review('approve');
+    else if (e.key === 'r' || e.key === 'R') review('reject');
+    else if (e.key === 'ArrowRight' && cur < items.length-1){ cur++; render(); }
+    else if (e.key === 'ArrowLeft' && cur > 0){ cur--; render(); }
+  });
+
+  render();
+  updateCount();
+
+  function toggleDrawer(open){
+    document.getElementById('sidebar').classList.toggle('open', open);
+    document.getElementById('overlay').classList.toggle('show', open);
+  }
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

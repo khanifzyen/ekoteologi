@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Dashboard Admin — Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar" id="sidebar" aria-label="Navigasi admin">
+    <div class="brand">
+      <div class="mark"><i class="fas fa-seedling" aria-hidden="true"></i></div>
+      <div><strong>Ekoteologi AR</strong><span>Panel Admin</span></div>
+    </div>
+    <nav class="nav">
+      <a href="index.html" class="active" aria-current="page"><i class="fas fa-gauge-high" aria-hidden="true"></i> Dashboard</a>
+      <a href="pengguna.html"><i class="fas fa-users" aria-hidden="true"></i> Pengguna</a>
+      <a href="verifikasi.html"><i class="fas fa-clipboard-check" aria-hidden="true"></i> Verifikasi Misi <span class="count">23</span></a>
+      <a href="#" onclick="toast('Modul Misi (pola sama — belum dimockup)');return false;"><i class="fas fa-bullseye" aria-hidden="true"></i> Misi</a>
+      <a href="#" onclick="toast('Modul E-Learning (pola sama — belum dimockup)');return false;"><i class="fas fa-book-open" aria-hidden="true"></i> E-Learning</a>
+      <a href="#" onclick="toast('Modul Konten Harian (pola sama — belum dimockup)');return false;"><i class="fas fa-calendar-day" aria-hidden="true"></i> Konten Harian</a>
+
+      <div class="nav-label">Sistem</div>
+      <a href="#" onclick="toast('Composer Push (pola sama — belum dimockup)');return false;"><i class="fas fa-bell" aria-hidden="true"></i> Push Notifikasi</a>
+      <a href="#" onclick="toast('Audit Log (pola sama — belum dimockup)');return false;"><i class="fas fa-list-check" aria-hidden="true"></i> Audit Log</a>
+      <a href="#" onclick="toast('Laporan (pola sama — belum dimockup)');return false;"><i class="fas fa-file-csv" aria-hidden="true"></i> Laporan</a>
+
+      <div class="nav-label">Fase 2</div>
+      <a href="#"><i class="fas fa-gift" aria-hidden="true"></i> Reward <span data-soon>Segera</span></a>
+      <a href="#"><i class="fas fa-comments" aria-hidden="true"></i> Moderasi <span data-soon>Segera</span></a>
+      <a href="#"><i class="fas fa-map-location-dot" aria-hidden="true"></i> Peta <span data-soon>Segera</span></a>
+    </nav>
+    <div class="side-user">
+      <img src="https://i.pravatar.cc/72?img=13" alt="" width="36" height="36">
+      <div class="who"><strong>Ust. Farid</strong><span>Administrator</span></div>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Keluar (demo)')" aria-label="Keluar"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i></button>
+    </div>
+  </aside>
+  <div class="drawer-overlay" id="overlay" onclick="toggleDrawer(false)"></div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" type="button" onclick="toggleDrawer(true)" aria-label="Buka menu navigasi"><i class="fas fa-bars" aria-hidden="true"></i></button>
+      <div class="search">
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" placeholder="Cari pengguna, misi, konten…" aria-label="Cari">
+      </div>
+      <div class="top-right">
+        <button class="top-icon" type="button" onclick="toast('3 notifikasi baru (demo)')" aria-label="Notifikasi"><i class="fas fa-bell" aria-hidden="true"></i><span class="dot" aria-hidden="true"></span></button>
+        <img class="top-avatar" src="https://i.pravatar.cc/72?img=13" alt="Avatar Ust. Farid" width="36" height="36">
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Kamis, 3 September 2026 · ringkasan 7 hari terakhir</p>
+        </div>
+        <div style="display:flex; gap: var(--space-2);">
+          <button class="btn btn-outline" type="button" onclick="toast('Export CSV dimulai (demo)')"><i class="fas fa-download" aria-hidden="true"></i> Export</button>
+          <button class="btn btn-primary" type="button" onclick="toast('Buka composer push (demo)')"><i class="fas fa-paper-plane" aria-hidden="true"></i> Kirim Push</button>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi-grid">
+        <div class="panel kpi">
+          <div class="ic"><i class="fas fa-users" aria-hidden="true"></i></div>
+          <div>
+            <div class="lbl">Pengguna Aktif (7 hari)</div>
+            <div class="val num">2.847</div>
+            <div class="delta up"><i class="fas fa-arrow-trend-up" aria-hidden="true"></i> +12,4% <small>vs minggu lalu</small></div>
+          </div>
+        </div>
+        <div class="panel kpi">
+          <div class="ic"><i class="fas fa-camera" aria-hidden="true"></i></div>
+          <div>
+            <div class="lbl">Total Scan Hari Ini</div>
+            <div class="val num">190</div>
+            <div class="delta up"><i class="fas fa-arrow-trend-up" aria-hidden="true"></i> +8,1% <small>vs kemarin</small></div>
+          </div>
+        </div>
+        <div class="panel kpi">
+          <div class="ic"><i class="fas fa-clipboard-check" aria-hidden="true"></i></div>
+          <div>
+            <div class="lbl">Antrian Verifikasi</div>
+            <div class="val num">23</div>
+            <div class="delta down"><i class="fas fa-plus" aria-hidden="true"></i> 6 baru <small>· <a href="verifikasi.html">proses sekarang</a></small></div>
+          </div>
+        </div>
+        <div class="panel kpi">
+          <div class="ic"><i class="fas fa-coins" aria-hidden="true"></i></div>
+          <div>
+            <div class="lbl">Biaya LLM (Sep)</div>
+            <div class="val num">Rp84,5rb</div>
+            <div class="delta up"><i class="fas fa-check" aria-hidden="true"></i> 56% <small>dari budget Rp150rb</small></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-body chart">
+            <div class="chart-kicker">Scan AI · 1–14 Sep 2026</div>
+            <div class="chart-title">Scan harian naik hampir 3× dalam dua minggu</div>
+            <div class="chart-sub">Jumlah pemindaian sampah per hari (semua pengguna)</div>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 560 240" role="img" aria-label="Grafik garis: scan harian naik dari 64 pada 1 September menjadi 190 pada 14 September">
+                <!-- gridlines + ticks -->
+                <g aria-hidden="true">
+                  <line class="gridline" x1="40" y1="220" x2="550" y2="220"/>
+                  <line class="gridline" x1="40" y1="167.5" x2="550" y2="167.5"/>
+                  <line class="gridline" x1="40" y1="115" x2="550" y2="115"/>
+                  <line class="gridline" x1="40" y1="62.5" x2="550" y2="62.5"/>
+                  <line class="axis" x1="40" y1="10" x2="40" y2="220"/>
+                  <text class="tick-label" x="34" y="224" text-anchor="end">0</text>
+                  <text class="tick-label" x="34" y="171" text-anchor="end">50</text>
+                  <text class="tick-label" x="34" y="119" text-anchor="end">100</text>
+                  <text class="tick-label" x="34" y="66" text-anchor="end">150</text>
+                  <text class="tick-label" x="34" y="14" text-anchor="end">200</text>
+                  <text class="tick-label" x="40" y="236">1 Sep</text>
+                  <text class="tick-label" x="197" y="236">5 Sep</text>
+                  <text class="tick-label" x="354" y="236">9 Sep</text>
+                  <text class="tick-label" x="550" y="236" text-anchor="end">14 Sep</text>
+                </g>
+                <path class="area-fill fade-in d2" d="M40,152.8 L79.2,133.9 L118.5,145.4 L157.7,120.3 L196.9,127.6 L236.2,94 L275.4,79.3 L314.6,96.1 L353.8,70.9 L393.1,56.2 L432.3,63.6 L471.5,39.4 L510.8,46.8 L550,20.5 L550,220 L40,220 Z"/>
+                <path class="line-main draw" d="M40,152.8 L79.2,133.9 L118.5,145.4 L157.7,120.3 L196.9,127.6 L236.2,94 L275.4,79.3 L314.6,96.1 L353.8,70.9 L393.1,56.2 L432.3,63.6 L471.5,39.4 L510.8,46.8 L550,20.5"/>
+                <circle class="dot" cx="40" cy="152.8" r="3.5"/>
+                <circle class="dot" cx="275.4" cy="79.3" r="3.5"/>
+                <circle class="dot-accent" cx="550" cy="20.5" r="5"/>
+                <text class="annot fade-in d3" x="544" y="40" text-anchor="end">14 Sep · 190 scan</text>
+              </svg>
+            </div>
+            <div class="chart-foot">Sumber: tabel scans · cache LLM hit rate 74%</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-body chart">
+            <div class="chart-kicker">Komposisi Kategori · 7 Hari</div>
+            <div class="chart-title">Plastik mendominasi sampah hasil scan</div>
+            <div class="chart-sub">Persentase kategori dari 1.204 scan minggu ini</div>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 300 210" role="img" aria-label="Grafik batang: Organik 42 persen, Plastik 31 persen, Residu 18 persen, B3 9 persen">
+                <line class="axis" x1="20" y1="180" x2="285" y2="180"/>
+                <g aria-hidden="true">
+                  <rect class="bar" x="30"  y="37.2" width="44" height="142.8" rx="4"/>
+                  <rect class="bar-accent" x="96" y="74.6" width="44" height="105.4" rx="4"/>
+                  <rect class="bar" x="162" y="118.8" width="44" height="61.2" rx="4"/>
+                  <rect class="bar" x="228" y="149.4" width="44" height="30.6" rx="4"/>
+                </g>
+                <text class="bar-value fade-in d1" x="52"  y="30" text-anchor="middle">42%</text>
+                <text class="bar-value fade-in d2" x="118" y="67" text-anchor="middle">31%</text>
+                <text class="bar-value fade-in d2" x="184" y="112" text-anchor="middle">18%</text>
+                <text class="bar-value fade-in d3" x="250" y="142" text-anchor="middle">9%</text>
+                <text class="bar-label" x="52"  y="197" text-anchor="middle">Organik</text>
+                <text class="bar-label" x="118" y="197" text-anchor="middle">Plastik</text>
+                <text class="bar-label" x="184" y="197" text-anchor="middle">Residu</text>
+                <text class="bar-label" x="250" y="197" text-anchor="middle">B3</text>
+              </svg>
+            </div>
+            <div class="chart-foot">Sumber: tabel scans · join waste_categories</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verifikasi terbaru + aktivitas -->
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2>Verifikasi Terbaru</h2><div class="sub">Bukti misi yang masuk hari ini</div></div>
+            <a class="btn btn-outline btn-sm" href="verifikasi.html">Lihat antrian <i class="fas fa-angle-right" aria-hidden="true"></i></a>
+          </div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr><th>Pengguna</th><th>Misi</th><th>Waktu</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=32" alt="" width="34" height="34" loading="lazy"><div><strong>Dewi Lestari</strong><span>Bogor</span></div></div></td>
+                  <td data-label="Misi">Setor 1 kg Plastik</td>
+                  <td data-label="Waktu" class="num">09.12</td>
+                  <td data-label="Status"><span class="badge badge-pending">Menunggu</span></td>
+                  <td data-label="Aksi"><a href="verifikasi.html" class="btn btn-outline btn-sm">Review</a></td>
+                </tr>
+                <tr>
+                  <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=12" alt="" width="34" height="34" loading="lazy"><div><strong>Ahmad Fauzi</strong><span>Depok</span></div></div></td>
+                  <td data-label="Misi">Pilah Sampah Rumah</td>
+                  <td data-label="Waktu" class="num">08.47</td>
+                  <td data-label="Status"><span class="badge badge-pending">Menunggu</span></td>
+                  <td data-label="Aksi"><a href="verifikasi.html" class="btn btn-outline btn-sm">Review</a></td>
+                </tr>
+                <tr>
+                  <td data-label="Pengguna"><div class="cell-user"><img src="https://i.pravatar.cc/68?img=47" alt="" width="34" height="34" loading="lazy"><div><strong>Aisyah R.</strong><span>Jakarta</span></div></div></td>
+                  <td data-label="Misi">Bersihkan Masjid</td>
+                  <td data-label="Waktu" class="num">07.30</td>
+                  <td data-label="Status"><span class="badge badge-active">Disetujui</span></td>
+                  <td data-label="Aksi"><span class="badge badge-active"><i class="fas fa-check" aria-hidden="true"></i> OK</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2>Aktivitas Admin</h2><div class="sub">Audit log terbaru</div></div>
+          </div>
+          <div class="panel-body" style="display:grid; gap: var(--space-3);">
+            <div style="display:flex; gap: var(--space-3); align-items:flex-start;">
+              <span class="badge badge-admin"><i class="fas fa-shield-halved" aria-hidden="true"></i> Admin</span>
+              <p style="font-size: var(--text-sm);"><strong>Ust. Farid</strong> menyetujui bukti misi <em>Bersihkan Masjid</em> · 07.31</p>
+            </div>
+            <div style="display:flex; gap: var(--space-3); align-items:flex-start;">
+              <span class="badge badge-editor"><i class="fas fa-pen-nib" aria-hidden="true"></i> Editor</span>
+              <p style="font-size: var(--text-sm);"><strong>Umi Kalsum</strong> menerbitkan konten harian 4 Sep · 06.58</p>
+            </div>
+            <div style="display:flex; gap: var(--space-3); align-items:flex-start;">
+              <span class="badge badge-verifier"><i class="fas fa-clipboard-check" aria-hidden="true"></i> Verifier</span>
+              <p style="font-size: var(--text-sm);"><strong>Hasan</strong> menolak 2 bukti (foto tidak jelas) · 06.20</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function toggleDrawer(open){
+    document.getElementById('sidebar').classList.toggle('open', open);
+    document.getElementById('overlay').classList.toggle('show', open);
+  }
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

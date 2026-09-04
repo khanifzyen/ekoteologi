@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>E-Learning — Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&family=Amiri&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  .el-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+  .el-top h1 { color: var(--color-on-dark); font-size: var(--text-xl); }
+  .back-btn {
+    min-width: 44px; min-height: 44px;
+    border: 1px solid color-mix(in srgb, var(--color-surface) 40%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--color-surface) 14%, transparent);
+    color: var(--color-on-dark);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; text-decoration: none;
+  }
+
+  .module-card { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .mod-cover {
+    width: 64px; height: 64px; flex: none;
+    border-radius: var(--radius-md);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .mod-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .mod-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+  .mod-head h3 { font-size: var(--text-md); }
+  .mod-head .count { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; }
+  .mod-body > p { font-size: var(--text-xs); color: var(--color-text-muted); margin: 2px 0 var(--space-3); }
+  .mod-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-top: auto; }
+  .mod-foot .pbar { flex: 1; height: 6px; }
+  .mod-foot .pct { font-size: var(--text-xs); font-weight: 700; color: var(--color-primary); white-space: nowrap; }
+
+  /* Lesson blocks (render JSONB blocks) */
+  .block { margin-bottom: var(--space-4); }
+  .block-p { font-size: var(--text-md); }
+  .block-quote {
+    background: var(--color-primary-soft);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+  }
+  .block-quote .arabic { font-family: var(--font-arabic); direction: rtl; text-align: right; font-size: var(--text-lg); color: var(--color-primary-strong); line-height: 1.8; margin-bottom: 6px; }
+  .block-quote .trans { font-size: var(--text-sm); font-style: italic; }
+  .block-quote cite { display: block; font-style: normal; font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; font-weight: 700; }
+  .block-tip { display: flex; gap: var(--space-3); background: color-mix(in srgb, var(--gold) 15%, var(--color-surface)); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); }
+  .block-tip i { color: var(--color-accent-text); margin-top: 3px; }
+  .block-tip p { font-size: var(--text-sm); }
+  .lesson-foot { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-5); }
+
+  /* Quiz */
+  .quiz-progress { display: flex; gap: 6px; justify-content: center; margin: var(--space-4) 0; }
+  .quiz-progress span { width: 24px; height: 6px; border-radius: var(--radius-pill); background: var(--line); }
+  .quiz-progress span.done { background: var(--color-primary); }
+  .opt {
+    display: flex; align-items: center; gap: var(--space-3);
+    border: 1.5px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-3);
+    cursor: pointer; min-height: 48px;
+    transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+    font-size: var(--text-sm);
+  }
+  .opt input { accent-color: var(--color-primary); width: 18px; height: 18px; flex: none; }
+  .opt:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+
+  .quiz-result { text-align: center; padding: var(--space-5) var(--space-4); }
+  .ring {
+    width: 120px; height: 120px; border-radius: 50%;
+    margin: 0 auto var(--space-4);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: conic-gradient(var(--color-primary) calc(var(--val) * 1%), var(--line) 0);
+    position: relative;
+  }
+  .ring::before { content: ''; position: absolute; inset: 10px; border-radius: 50%; background: var(--color-surface); }
+  .ring strong { position: relative; font-family: var(--font-heading); font-weight: 800; font-size: var(--text-2xl); color: var(--color-primary-strong); }
+  .ring span { position: relative; font-size: 10px; color: var(--color-text-muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="demo-bar">
+    <strong>Mockup:</strong> tampilan
+    <button class="chip-btn on" data-v="modul" onclick="setView('modul',this)">Daftar Modul</button>
+    <button class="chip-btn" data-v="pelajaran" onclick="setView('pelajaran',this)">Detail Pelajaran</button>
+    <button class="chip-btn" data-v="kuis" onclick="setView('kuis',this)">Kuis</button>
+    — state
+    <button class="chip-btn" data-s="normal" onclick="setState3('normal',this)">Normal</button>
+    <button class="chip-btn" data-s="loading" onclick="setState3('loading',this)">Loading</button>
+    <button class="chip-btn" data-s="empty" onclick="setState3('empty',this)">Empty</button>
+  </div>
+
+  <header class="header-curved">
+    <div class="el-top">
+      <button class="back-btn" type="button" onclick="history.length ? history.back() : location.href='beranda.html'" aria-label="Kembali"><i class="fas fa-angle-left" aria-hidden="true"></i></button>
+      <h1>E-Learning</h1>
+      <span class="chip chip-gold"><i class="fas fa-graduation-cap" aria-hidden="true"></i> 2/6 modul</span>
+    </div>
+  </header>
+
+  <main class="content-overlap">
+    <!-- Konten harian -->
+    <div class="card wisdom" id="dailyCard">
+      <div class="wisdom-label">Refleksi Hari Ini</div>
+      <blockquote>"Bumi adalah amanah — sungguh Dia tidak menyukai kebinasaan."</blockquote>
+      <cite>— QS. Al-Baqarah: 205</cite>
+    </div>
+
+    <!-- ═══ VIEW: MODUL ═══ -->
+    <section id="viewModul">
+      <div class="section-head" style="margin-top: var(--space-4)"><h2>Modul Belajar</h2></div>
+      <div id="moduleList">
+        <div class="card module-card">
+          <div class="mod-cover" aria-hidden="true"><i class="fas fa-leaf"></i></div>
+          <div class="mod-body">
+            <div class="mod-head"><h3>Eko-Iman: Dasar Ekoteologi</h3><span class="count">5 pelajaran</span></div>
+            <p>Mengenal hubungan iman dan tanggung jawab lingkungan.</p>
+            <div class="mod-foot">
+              <div class="pbar"><div class="pbar-fill green" style="width:100%"></div></div>
+              <span class="pct">Selesai</span>
+              <a class="btn btn-ghost btn-sm" href="#" onclick="setView('pelajaran', document.querySelector('[data-v=pelajaran]'));return false;">Ulangi</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card module-card">
+          <div class="mod-cover" aria-hidden="true"><i class="fas fa-recycle"></i></div>
+          <div class="mod-body">
+            <div class="mod-head"><h3>Fiqih Sampah Sehari-hari</h3><span class="count">4 pelajaran · kuis</span></div>
+            <p>Hukum memilah sampah, dhuha air bekas wudhu, dan praktik harian.</p>
+            <div class="mod-foot">
+              <div class="pbar"><div class="pbar-fill green" style="width:50%"></div></div>
+              <span class="pct">50%</span>
+              <a class="btn btn-primary btn-sm" href="#" onclick="setView('pelajaran', document.querySelector('[data-v=pelajaran]'));return false;">Lanjutkan</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card module-card">
+          <div class="mod-cover" aria-hidden="true"><i class="fas fa-droplet"></i></div>
+          <div class="mod-body">
+            <div class="mod-head"><h3>Hemat Air, Amal Terjaga</h3><span class="count">3 pelajaran · kuis</span></div>
+            <p>Adab menggunakan air, wudhu hemat, dan kisah Nabi di Padangpasir.</p>
+            <div class="mod-foot">
+              <div class="pbar"><div class="pbar-fill green" style="width:0%"></div></div>
+              <span class="pct">Baru</span>
+              <a class="btn btn-secondary btn-sm" href="#" onclick="setView('pelajaran', document.querySelector('[data-v=pelajaran]'));return false;">Mulai</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VIEW: DETAIL PELAJARAN ═══ -->
+    <section id="viewPelajaran" hidden>
+      <div class="section-head" style="margin-top: var(--space-4)">
+        <h2>Pelajaran 3 dari 4</h2>
+        <span class="chip chip-green"><i class="fas fa-book-open" aria-hidden="true"></i> Fiqih Sampah</span>
+      </div>
+      <div class="card">
+        <h3 style="font-size: var(--text-lg); margin-bottom: var(--space-3);">Hukum Memilah Sampah dalam Islam</h3>
+        <div class="block block-p">
+          <p>Memilah sampah termasuk <strong>fardhu kifayah</strong> di lingkungan bersama: bila sebagian sudah melakukannya, kewajiban gugur bagi yang lain — namun pahala bagi yang berinisiatif. Di rumah sendiri, memilah adalah bagian dari menjaga kebersihan yang dianjurkan (mustahab) dan mencegah mudharat.</p>
+        </div>
+        <div class="block block-quote">
+          <div class="arabic" lang="ar">وَلَا تُفْسِدُوا فِي الْأَرْضِ بَعْدَ إِصْلَاحِهَا</div>
+          <p class="trans">"Dan janganlah kamu berbuat kerusakan di bumi setelah Allah memperbaikinya."</p>
+          <cite>— QS. Al-A'raf: 56</cite>
+        </div>
+        <div class="block block-tip">
+          <i class="fas fa-lightbulb" aria-hidden="true"></i>
+          <p><strong>Tip:</strong> Sedotan plastik butuh ±200 tahun untuk terurai. Bawa tumbler dan sedotan stainless saat bepergian.</p>
+        </div>
+        <div class="lesson-foot">
+          <button class="btn btn-primary btn-block" type="button" onclick="toast('Pelajaran ditandai selesai · +5 poin (demo)')">
+            <i class="fas fa-check" aria-hidden="true"></i> Tandai Selesai &amp; Lanjut
+          </button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="setView('kuis', document.querySelector('[data-v=kuis]'))">Lompat ke Kuis Modul <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ VIEW: KUIS ═══ -->
+    <section id="viewKuis" hidden>
+      <div id="quizIntro" class="card" style="margin-top: var(--space-4); text-align:center;">
+        <div class="empty-icon" style="margin-bottom: var(--space-3);"><i class="fas fa-circle-question" aria-hidden="true"></i></div>
+        <h3 style="font-size: var(--text-lg); margin-bottom: 4px;">Kuis: Fiqih Sampah</h3>
+        <p style="font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-4);">5 soal · lulus 70% · hadiah <strong style="color: var(--color-accent-text)">+20 poin</strong></p>
+        <button class="btn btn-primary btn-block" type="button" onclick="startQuiz()">Mulai Kuis <i class="fas fa-play" aria-hidden="true"></i></button>
+      </div>
+
+      <div id="quizBody" hidden>
+        <div class="quiz-progress" id="qProgress" aria-label="Kemajuan kuis"></div>
+        <div class="card">
+          <h3 style="font-size: var(--text-md); margin-bottom: var(--space-4);" id="qText">Sampah plastik termasuk kategori…</h3>
+          <label class="opt"><input type="radio" name="q1" value="a"> Organik — mudah terurai</label>
+          <label class="opt"><input type="radio" name="q1" value="b"> Anorganik — perlu dipilah khusus</label>
+          <label class="opt"><input type="radio" name="q1" value="c"> B3 — berbahaya bagi kesehatan</label>
+          <div id="qFeedback" class="field-error" style="margin-bottom: var(--space-3);">Pilih salah satu jawaban dulu, ya.</div>
+          <button class="btn btn-primary btn-block" type="button" id="qNext" onclick="submitAnswer()">Jawab</button>
+        </div>
+      </div>
+
+      <div id="quizDone" class="card quiz-result" hidden>
+        <div class="ring" style="--val:80" role="img" aria-label="Skor 80 dari 100"><strong>80</strong><span>LULUS</span></div>
+        <h3 style="font-size: var(--text-xl); color: var(--color-primary-strong); margin-bottom: 4px;">MasyaAllah, Lulus!</h3>
+        <p style="font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-4);">+20 poin masuk ke dompet kebaikanmu.</p>
+        <button class="btn btn-primary btn-block" type="button" onclick="setView('modul', document.querySelector('[data-v=modul]'))">Kembali ke Modul</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="nav-wrap">
+    <button class="fab" type="button" onclick="location.href='scan.html'" aria-label="Buka pemindai sampah"><i class="fas fa-camera" aria-hidden="true"></i></button>
+    <nav class="bottom-nav" aria-label="Navigasi utama">
+      <a class="nav-item" href="beranda.html"><i class="fas fa-home" aria-hidden="true"></i>Beranda</a>
+      <a class="nav-item active" href="elearning.html" aria-current="page"><i class="fas fa-book-open" aria-hidden="true"></i>Belajar</a>
+      <div class="nav-spacer" aria-hidden="true"></div>
+      <a class="nav-item" href="misi.html"><i class="fas fa-bullseye" aria-hidden="true"></i>Misi</a>
+      <a class="nav-item" href="#" onclick="toast('Halaman Profil (demo)');return false;"><i class="fas fa-user" aria-hidden="true"></i>Profil</a>
+    </nav>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function setView(v, btn){
+    document.getElementById('viewModul').hidden = v!=='modul';
+    document.getElementById('viewPelajaran').hidden = v!=='pelajaran';
+    document.getElementById('viewKuis').hidden = v!=='kuis';
+    document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+    window.scrollTo({top:0});
+  }
+
+  /* state demo untuk daftar modul */
+  function setState3(st, btn){
+    document.querySelectorAll('[data-s]').forEach(b=>b.classList.toggle('on', b===btn));
+    const list = document.getElementById('moduleList');
+    document.querySelectorAll('.state-layer').forEach(n=>n.remove());
+    if(st==='normal'){ document.querySelectorAll('#moduleList .module-card').forEach(c=>c.hidden=false); return; }
+    document.querySelectorAll('#moduleList .module-card').forEach(c=>c.hidden=true);
+    let layer;
+    if(st==='loading'){
+      layer=document.createElement('div');
+      layer.className='state-layer';
+      layer.innerHTML='<div class="card sk-card"><div class="skeleton sk-circle"></div><div class="sk-lines"><div class="skeleton" style="width:55%"></div><div class="skeleton" style="width:85%"></div><div class="skeleton" style="width:30%;height:20px"></div></div></div>'.repeat(3);
+    }
+    if(st==='empty'){
+      layer=document.createElement('div');
+      layer.className='card empty state-layer';
+      layer.innerHTML='<div class="empty-icon"><i class="fas fa-book-open" aria-hidden="true"></i></div><h3>Belum ada modul</h3><p>Modul pembelajaran sedang disiapkan tim editor. Cek lagi nanti, ya.</p>';
+    }
+    list.prepend(layer);
+  }
+
+  /* mini-quiz demo: 3 langkah */
+  const steps = [3, 2, 1];
+  let qi = 0;
+  function startQuiz(){
+    document.getElementById('quizIntro').hidden = true;
+    document.getElementById('quizDone').hidden = true;
+    document.getElementById('quizBody').hidden = false;
+    qi = 0; renderProgress();
+    document.getElementById('qNext').innerHTML = 'Jawab';
+  }
+  function renderProgress(){
+    document.getElementById('qProgress').innerHTML = steps.map((_,k)=>`<span class="${k<qi?'done':''}"></span>`).join('');
+  }
+  function submitAnswer(){
+    const picked = document.querySelector('input[name=q1]:checked');
+    const fb = document.getElementById('qFeedback');
+    if(!picked){ fb.style.display='block'; return; }
+    fb.style.display='none';
+    qi++;
+    if(qi >= 3){
+      document.getElementById('quizBody').hidden = true;
+      document.getElementById('quizDone').hidden = false;
+      toast('Kuis selesai! +20 poin (demo)');
+    } else {
+      renderProgress();
+      toast('Benar! Soal ' + (qi+1) + ' dari 3…');
+    }
+  }
+
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

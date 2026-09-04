@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Splash & Onboarding — Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  /* ── State demo ── */
+  body.onboarding .ob-splash { display: none; }
+  body.splash .ob-flow { display: none; }
+
+  /* ── SPLASH ── */
+  .ob-splash {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    text-align: center;
+  }
+  .splash-logo {
+    width: 96px; height: 96px;
+    border-radius: var(--radius-lg);
+    background: var(--color-header-grad);
+    color: var(--color-on-dark);
+    font-size: 42px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-2);
+    animation: pop var(--dur-slow) var(--ease-spring) both;
+  }
+  .splash-logo i { color: var(--gold-light); }
+  .ob-splash h1 { font-size: var(--text-xl); margin-top: var(--space-3); }
+  .ob-splash p { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .splash-loader { margin-top: var(--space-5); width: 120px; height: 4px; border-radius: var(--radius-pill); background: var(--line); overflow: hidden; }
+  .splash-loader span { display: block; height: 100%; width: 40%; background: var(--color-primary); border-radius: var(--radius-pill); animation: load 1s var(--ease-out) infinite; }
+  @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
+  @keyframes pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* ── ONBOARDING ── */
+  .ob-flow { flex: 1; display: flex; flex-direction: column; }
+  .ob-skip {
+    position: absolute; top: 0; right: 0;
+    min-height: 48px; padding: 0 var(--space-4);
+    display: flex; align-items: center;
+    background: none; border: none;
+    color: var(--color-primary-strong);
+    font-weight: 700; font-size: var(--text-sm);
+    cursor: pointer; z-index: 5;
+  }
+  .ob-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--space-5) var(--space-5) var(--space-4); }
+  .ob-art {
+    width: 210px; height: 210px;
+    border-radius: 50%;
+    background: var(--color-primary-soft);
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: var(--space-6);
+  }
+  .ob-art::after {
+    content: '';
+    position: absolute; inset: -12px;
+    border-radius: 50%;
+    border: 2px dashed color-mix(in srgb, var(--color-primary) 40%, transparent);
+    animation: spin 14s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ob-art .ic {
+    position: absolute;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-1);
+    color: var(--color-primary);
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ob-art .ic.ic-main { position: relative; width: 92px; height: 92px; font-size: 40px; background: var(--color-header-grad); color: var(--gold-light); box-shadow: var(--shadow-2); z-index: 2; }
+  .ic1 { top: 18px; left: 6px; } .ic2 { top: 6px; right: 30px; }
+  .ic3 { bottom: 24px; left: 24px; } .ic4 { bottom: 10px; right: 6px; }
+  .ob-body h1 { font-size: var(--text-xl); margin-bottom: var(--space-3); }
+  .ob-body h1 em { font-style: normal; color: var(--color-primary); }
+  .ob-body p { color: var(--color-text-muted); font-size: var(--text-sm); max-width: 30ch; }
+  .ob-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: var(--space-4); }
+  .ob-dots button {
+    width: 10px; height: 10px; min-width: 10px;
+    border-radius: 50%;
+    border: none; padding: 0;
+    background: var(--line-strong);
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-out), width var(--dur-fast) var(--ease-out);
+  }
+  .ob-dots button.on { background: var(--color-primary); width: 26px; border-radius: var(--radius-pill); }
+  .ob-cta { padding: var(--space-4) var(--space-5) var(--space-6); display: flex; flex-direction: column; gap: var(--space-3); }
+  .ob-step-links { display: flex; justify-content: center; gap: var(--space-4); margin-top: var(--space-1); }
+  .link-btn { background: none; border: none; color: var(--color-text-muted); font-weight: 700; font-size: var(--text-sm); cursor: pointer; min-height: 44px; }
+  .link-btn:hover { color: var(--color-primary); }
+  .ob-slide { animation: fadeup var(--dur-base) var(--ease-out) both; }
+  @keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body class="onboarding">
+<div class="app demo-app">
+  <div class="demo-bar">
+    <strong>Mockup:</strong> state
+    <button class="chip-btn on" data-set="splash" onclick="setDemo(this,'splash')">Splash</button>
+    <button class="chip-btn" data-set="onboarding" onclick="setDemo(this,'onboarding')">Onboarding</button>
+  </div>
+
+  <!-- ═══ SPLASH ═══ -->
+  <section class="ob-splash" aria-label="Layar splash">
+    <div class="splash-logo"><i class="fas fa-seedling" aria-hidden="true"></i></div>
+    <h1>Ekoteologi AR</h1>
+    <p>Jaga bumi, jaga iman.</p>
+    <div class="splash-loader" aria-hidden="true"><span></span></div>
+    <p class="sr-only">Memuat aplikasi…</p>
+  </section>
+
+  <!-- ═══ ONBOARDING ═══ -->
+  <div class="ob-flow" aria-label="Onboarding">
+    <button class="ob-skip" type="button" onclick="toast('Lewati onboarding → ke halaman login')">Lewati <i class="fas fa-angle-right" aria-hidden="true"></i></button>
+
+    <div class="ob-body" id="obBody">
+      <!-- slide dirender via JS -->
+    </div>
+
+    <div class="ob-dots" id="obDots" role="tablist" aria-label="Langkah onboarding"></div>
+
+    <div class="ob-cta">
+      <button class="btn btn-primary btn-block" id="obNext" onclick="nextSlide()">Mulai Sekarang <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+      <div class="ob-step-links">
+        <button class="link-btn" type="button" onclick="prevSlide()" id="obPrev">Kembali</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const titles = [
+    'Kenali Sampah <em>Sekilas</em>',
+    'Belajar Fiqih <em>Lingkungan</em>',
+    'Aksi Nyata, <em>Pahala Nyata</em>'
+  ];
+  const texts = [
+    'Arahkan kamera ke sampah — AI langsung mengenali jenisnya, memberi saran pembuangan, dan poin kebaikan.',
+    'Modul singkat + kuis interaktif. Setiap pelajaran menambah wawasan dan poinmu.',
+    'Selesaikan misi harian, jaga streak, dan tumbuhkan pohon virtual dari kebaikanmu.'
+  ];
+  const mains = ['fa-camera','fa-book-open','fa-tree'];
+  const sats = [
+    ['fa-recycle','fa-seedling','fa-tree','fa-coins'],
+    ['fa-graduation-cap','fa-circle-question','fa-award','fa-lightbulb'],
+    ['fa-fire','fa-medal','fa-bullseye','fa-users']
+  ];
+  let cur = 0;
+  const body = document.getElementById('obBody');
+  const dots = document.getElementById('obDots');
+
+  function render(i){
+    body.innerHTML = `
+      <div class="ob-slide" role="tabpanel" aria-label="Langkah ${i+1} dari 3">
+        <div class="ob-art" aria-hidden="true">
+          <div class="ic ic-main"><i class="fas ${mains[i]}"></i></div>
+          <div class="ic ic1"><i class="fas ${sats[i][0]}"></i></div>
+          <div class="ic ic2"><i class="fas ${sats[i][1]}"></i></div>
+          <div class="ic ic3"><i class="fas ${sats[i][2]}"></i></div>
+          <div class="ic ic4"><i class="fas ${sats[i][3]}"></i></div>
+        </div>
+        <h1>${titles[i]}</h1>
+        <p>${texts[i]}</p>
+      </div>`;
+    dots.innerHTML = titles.map((_,k)=>`<button role="tab" class="${k===i?'on':''}" aria-label="Langkah ${k+1}" aria-selected="${k===i}" onclick="goSlide(${k})"></button>`).join('');
+    document.getElementById('obNext').innerHTML = (i===2 ? 'Mulai Sekarang <i class="fas fa-arrow-right" aria-hidden="true"></i>' : 'Lanjut <i class="fas fa-arrow-right" aria-hidden="true"></i>');
+    document.getElementById('obPrev').style.visibility = i===0 ? 'hidden' : 'visible';
+  }
+  function goSlide(i){ cur=i; render(cur); }
+  function nextSlide(){ if(cur<2){cur++;render(cur);} else toast('Menuju halaman login…'); }
+  function prevSlide(){ if(cur>0){cur--;render(cur);} }
+  render(0);
+
+  function setDemo(btn, state){
+    document.querySelectorAll('.chip-btn').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    document.body.classList.remove('onboarding','splash');
+    document.body.classList.add(state);
+  }
+
+  let t;
+  function toast(msg){
+    let el = document.querySelector('.toast');
+    if(!el){ el=document.createElement('div'); el.className='toast'; document.body.appendChild(el); }
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>

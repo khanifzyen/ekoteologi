@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2E7D32">
+<title>Misi — Ekoteologi AR</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+  .mission-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
+  .mission-top h1 { color: var(--color-on-dark); font-size: var(--text-xl); }
+  .back-btn {
+    min-width: 44px; min-height: 44px;
+    border: 1px solid color-mix(in srgb, var(--color-surface) 40%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--color-surface) 14%, transparent);
+    color: var(--color-on-dark);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; text-decoration: none;
+  }
+
+  .weekly { background: color-mix(in srgb, var(--color-surface) 15%, transparent); border: 1px solid color-mix(in srgb, var(--color-surface) 25%, transparent); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+  .weekly .row { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--color-on-dark); margin-bottom: var(--space-2); }
+  .weekly .row strong { color: var(--gold-light); }
+  .weekly .track { height: 10px; border-radius: var(--radius-pill); background: color-mix(in srgb, #000 25%, transparent); overflow: hidden; }
+  .weekly .fill { height: 100%; width: 60%; border-radius: var(--radius-pill); background: var(--color-accent); }
+
+  .mission-card {
+    display: flex; gap: var(--space-3); align-items: flex-start;
+    background: var(--color-surface); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-1);
+    border-left: 4px solid transparent;
+    padding: var(--space-4);
+    margin-bottom: var(--space-3);
+  }
+  .mission-card.done { background: var(--color-primary-soft); border-left-color: var(--color-primary); }
+  .mission-card.waiting { border-left-color: var(--color-info); }
+  .mc-icon {
+    width: 46px; height: 46px; flex: none;
+    border-radius: var(--radius-sm);
+    background: var(--surface-alt); color: var(--color-primary);
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .mission-card.done .mc-icon { background: var(--color-surface); }
+  .mc-body { flex: 1; min-width: 0; }
+  .mc-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+  .mc-head h3 { font-size: var(--text-md); font-family: var(--font-heading); }
+  .mc-head .pts { font-family: var(--font-heading); font-weight: 800; font-size: var(--text-sm); color: var(--color-accent-text); white-space: nowrap; }
+  .mc-body p { font-size: var(--text-xs); color: var(--color-text-muted); margin: 3px 0 var(--space-3); }
+  .mc-status { font-size: var(--text-xs); font-weight: 700; }
+  .mc-status.prog { color: var(--color-primary); }
+  .mc-status.wait { color: var(--color-info); }
+  .mc-status.done { color: var(--color-primary-strong); }
+  .mc-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+  .mc-actions .btn { flex: 1; }
+
+  .badge-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+  .badge-cell { text-align: center; }
+  .badge-medal {
+    width: 56px; height: 56px;
+    margin: 0 auto 6px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    background: var(--color-primary-soft); color: var(--color-primary-strong);
+    border: 2px solid transparent;
+  }
+  .badge-cell.locked .badge-medal { background: var(--surface-alt); color: var(--ink-300); border-color: var(--line); }
+  .badge-cell span { font-size: 10px; color: var(--color-text-muted); display: block; }
+
+  .upload-note { display: flex; gap: 8px; font-size: var(--text-xs); color: var(--color-text-muted); background: var(--color-info-soft); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); margin-top: var(--space-2); }
+  .upload-note i { color: var(--color-info); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="demo-bar">
+    <strong>Mockup:</strong> tab
+    <button class="chip-btn on" data-tab="harian" onclick="setTab('harian',this)">Harian</button>
+    <button class="chip-btn" data-tab="pencapaian" onclick="setTab('pencapaian',this)">Pencapaian</button>
+    — state
+    <button class="chip-btn" data-st="normal" onclick="setState2('normal',this)">Normal</button>
+    <button class="chip-btn" data-st="loading" onclick="setState2('loading',this)">Loading</button>
+    <button class="chip-btn" data-st="empty" onclick="setState2('empty',this)">Empty</button>
+    <button class="chip-btn" data-st="error" onclick="setState2('error',this)">Error</button>
+  </div>
+
+  <header class="header-curved">
+    <div class="mission-top">
+      <button class="back-btn" type="button" onclick="history.length ? history.back() : location.href='beranda.html'" aria-label="Kembali">
+        <i class="fas fa-angle-left" aria-hidden="true"></i>
+      </button>
+      <h1>Misi Kebaikan</h1>
+      <span class="chip chip-gold"><i class="fas fa-bolt" aria-hidden="true"></i> 3 misi baru</span>
+    </div>
+    <div class="weekly">
+      <div class="row"><span>Progres misi minggu ini</span><strong>6/10 · +120 poin</strong></div>
+      <div class="track" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" aria-label="Progres misi mingguan"><div class="fill"></div></div>
+    </div>
+  </header>
+
+  <main class="content-overlap">
+    <div class="tabs" role="tablist" style="margin-bottom: var(--space-4);">
+      <button class="tab-btn active" role="tab" aria-selected="true" data-pane="paneHarian" onclick="setTab('harian', this)">Harian</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-pane="panePencapaian" onclick="setTab('pencapaian', this)">Pencapaian</button>
+    </div>
+
+    <!-- ═══ TAB HARIAN ═══ -->
+    <section id="paneHarian">
+      <div id="missionList">
+        <!-- Misi auto_scan, in progress -->
+        <article class="mission-card">
+          <div class="mc-icon" aria-hidden="true"><i class="fas fa-camera"></i></div>
+          <div class="mc-body">
+            <div class="mc-head"><h3>Scan 3 Jenis Sampah</h3><span class="pts">+15</span></div>
+            <p>Gunakan scan AI untuk mengenali 3 jenis sampah berbeda hari ini.</p>
+            <div class="pbar"><div class="pbar-fill" style="width:66%"></div></div>
+            <p class="mc-status prog">2 dari 3 selesai · otomatis dari scan</p>
+          </div>
+        </article>
+
+        <!-- Misi photo, perlu unggah bukti -->
+        <article class="mission-card">
+          <div class="mc-icon" aria-hidden="true"><i class="fas fa-recycle"></i></div>
+          <div class="mc-body">
+            <div class="mc-head"><h3>Setor 1 kg Plastik ke Bank Sampah</h3><span class="pts">+50</span></div>
+            <p>Unggah foto bukti penyerahan sampahmu. Verifikasi admin maks. 1×24 jam.</p>
+            <div class="mc-actions">
+              <button class="btn btn-primary btn-sm" type="button" onclick="toast('Buka kamera/galeri untuk unggah bukti (demo)')">
+                <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> Unggah Bukti
+              </button>
+            </div>
+            <p class="upload-note"><i class="fas fa-circle-info" aria-hidden="true"></i> Foto mungkin memuat wajah — hanya dilihat admin verifier. Lihat Kebijakan Privasi.</p>
+          </div>
+        </article>
+
+        <!-- Misi manual -->
+        <article class="mission-card">
+          <div class="mc-icon" aria-hidden="true"><i class="fas fa-hands-bubbles"></i></div>
+          <div class="mc-body">
+            <div class="mc-head"><h3>Bersihkan Wudhu, Hemat Air</h3><span class="pts">+10</span></div>
+            <p>Gunakan air secukupnya saat wudhu hari ini — cukup klaim jujur, langsung disetujui.</p>
+            <div class="mc-actions">
+              <button class="btn btn-gold btn-sm" type="button" onclick="toast('Misi diklaim! +10 poin masuk (demo)')">
+                <i class="fas fa-check" aria-hidden="true"></i> Klaim Poin
+              </button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Misi menunggu verifikasi -->
+        <article class="mission-card waiting">
+          <div class="mc-icon" aria-hidden="true"><i class="fas fa-trash-can"></i></div>
+          <div class="mc-body">
+            <div class="mc-head"><h3>Pilah Sampah Rumah Tangga</h3><span class="pts">+20</span></div>
+            <p>Bukti diunggah kemarin, 14.20 WIB.</p>
+            <p class="mc-status wait"><i class="fas fa-hourglass-half" aria-hidden="true"></i> Menunggu verifikasi admin</p>
+          </div>
+        </article>
+
+        <!-- Misi selesai -->
+        <article class="mission-card done">
+          <div class="mc-icon" aria-hidden="true"><i class="fas fa-mosque"></i></div>
+          <div class="mc-body">
+            <div class="mc-head"><h3>Baca Refleksi "Bumi sebagai Amanah"</h3><span class="pts">+5</span></div>
+            <p class="mc-status done"><i class="fas fa-circle-check" aria-hidden="true"></i> Selesai · +5 poin</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ═══ TAB PENCAPAIAN (lencana) ═══ -->
+    <section id="panePencapaian" hidden>
+      <div class="section-head" style="margin-top:0"><h2>Lencana</h2><span class="chip chip-green">5 dari 12</span></div>
+      <div class="card">
+        <div class="badge-grid">
+          <div class="badge-cell"><div class="badge-medal"><i class="fas fa-seedling" aria-hidden="true"></i></div><span>Pemula Hijau</span></div>
+          <div class="badge-cell"><div class="badge-medal"><i class="fas fa-camera" aria-hidden="true"></i></div><span>Scanner 10x</span></div>
+          <div class="badge-cell"><div class="badge-medal"><i class="fas fa-fire" aria-hidden="true"></i></div><span>Streak 5 Hari</span></div>
+          <div class="badge-cell"><div class="badge-medal"><i class="fas fa-recycle" aria-hidden="true"></i></div><span>Pilah 1kg</span></div>
+          <div class="badge-cell"><div class="badge-medal"><i class="fas fa-graduation-cap" aria-hidden="true"></i></div><span>Modul Pertama</span></div>
+          <div class="badge-cell locked"><div class="badge-medal"><i class="fas fa-tree" aria-hidden="true"></i></div><span>Pohon Tumbuh</span></div>
+          <div class="badge-cell locked"><div class="badge-medal"><i class="fas fa-medal" aria-hidden="true"></i></div><span>50 Misi</span></div>
+          <div class="badge-cell locked"><div class="badge-medal"><i class="fas fa-users" aria-hidden="true"></i></div><span>Komunitas</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="nav-wrap">
+    <button class="fab" type="button" onclick="location.href='scan.html'" aria-label="Buka pemindai sampah"><i class="fas fa-camera" aria-hidden="true"></i></button>
+    <nav class="bottom-nav" aria-label="Navigasi utama">
+      <a class="nav-item" href="beranda.html"><i class="fas fa-home" aria-hidden="true"></i>Beranda</a>
+      <a class="nav-item" href="elearning.html"><i class="fas fa-book-open" aria-hidden="true"></i>Belajar</a>
+      <div class="nav-spacer" aria-hidden="true"></div>
+      <a class="nav-item active" href="misi.html" aria-current="page"><i class="fas fa-bullseye" aria-hidden="true"></i>Misi</a>
+      <a class="nav-item" href="#" onclick="toast('Halaman Profil (demo)');return false;"><i class="fas fa-user" aria-hidden="true"></i>Profil</a>
+    </nav>
+  </div>
+</div>
+
+<div class="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function setTab(name, btn){
+    document.getElementById('paneHarian').hidden = name !== 'harian';
+    document.getElementById('panePencapaian').hidden = name !== 'pencapaian';
+    document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
+    document.querySelectorAll('.tabs .tab-btn').forEach(b=>{
+      b.classList.toggle('active', b===btn);
+      b.setAttribute('aria-selected', b===btn ? 'true' : 'false');
+    });
+  }
+  function setState2(st, btn){
+    document.querySelectorAll('[data-st]').forEach(b=>b.classList.toggle('on', b===btn));
+    const list = document.getElementById('missionList');
+    document.querySelectorAll('.state-layer').forEach(n=>n.remove());
+    if(st==='normal'){ list.style.display=''; document.querySelectorAll('#paneHarian .mission-card').forEach(c=>c.hidden=false); return; }
+    document.querySelectorAll('#paneHarian .mission-card').forEach(c=>c.hidden=true);
+    list.style.display='block';
+    let layer;
+    if(st==='loading'){
+      layer = document.createElement('div');
+      layer.className='state-layer';
+      layer.innerHTML = '<div class="card sk-card"><div class="skeleton sk-circle"></div><div class="sk-lines"><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:85%"></div><div class="skeleton" style="width:35%;height:22px"></div></div></div>'.repeat(3);
+    }
+    if(st==='empty'){
+      layer = document.createElement('div');
+      layer.className='card empty state-layer';
+      layer.innerHTML='<div class="empty-icon"><i class="fas fa-mug-hot" aria-hidden="true"></i></div><h3>Semua misi selesai!</h3><p>Misi baru muncul setiap pagi pukul 05.00. Scan sampah untuk tambah poin.</p><a class="btn btn-primary" href="scan.html"><i class="fas fa-camera" aria-hidden="true"></i> Scan Sekarang</a>';
+    }
+    if(st==='error'){
+      layer = document.createElement('div');
+      layer.className='error-box state-layer';
+      layer.innerHTML='<i class="fas fa-triangle-exclamation" aria-hidden="true"></i><p>Gagal memuat misi. Periksa koneksi internetmu lalu coba lagi.</p><button class="btn btn-primary btn-sm" type="button" onclick="setState2(\'normal\', document.querySelector(\'[data-st=normal]\'))"><i class="fas fa-rotate-right" aria-hidden="true"></i> Coba Lagi</button>';
+    }
+    if(layer) list.prepend(layer);
+  }
+
+  let t;
+  function toast(msg){
+    const el=document.querySelector('.toast');
+    el.textContent=msg; el.classList.add('show');
+    clearTimeout(t); t=setTimeout(()=>el.classList.remove('show'),2600);
+  }
+</script>
+</body>
+</html>
