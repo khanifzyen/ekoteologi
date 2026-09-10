@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
-// Pulihkan sesi dari penyimpanan lokal (verifikasi token via /v1/profile).
+// Pulihkan sesi dari auth store SDK (token persist + authRefresh otomatis).
 onMounted(() => auth.restoreSession())
 </script>
 

@@ -3,7 +3,7 @@
 export type NotificationType = 'mission' | 'streak' | 'info' | 'reward'
 
 export interface NotificationItem {
-  id: number
+  id: string
   title: string | null
   body: string | null
   type: NotificationType | null

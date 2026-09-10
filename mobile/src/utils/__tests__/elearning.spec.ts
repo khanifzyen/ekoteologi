@@ -21,7 +21,7 @@ import {
 
 function card(progress: Partial<ModuleCard['progress']>, extra: Partial<ModuleCard> = {}): ModuleCard {
   return {
-    id: 1,
+    id: '1',
     title: 'Modul',
     slug: 'modul',
     description: null,

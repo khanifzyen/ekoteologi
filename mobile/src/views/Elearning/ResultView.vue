@@ -18,12 +18,12 @@ const router = useRouter()
 const toast = useToastStore()
 const quizResultStore = useQuizResultStore()
 
-const moduleId = computed(() => Number(route.params.moduleId))
+const moduleId = computed(() => String(route.params.moduleId))
 /** Hasil kuis dari store (null bila refresh langsung → redirect intro kuis). */
 const result = computed(() => quizResultStore.result)
 /** Soal + teks opsi utk bedah jawaban (snapshot dari store yang sama). */
-const questions = computed<Record<number, { question: string; options: string[] }>>(() => {
-  const map: Record<number, { question: string; options: string[] }> = {}
+const questions = computed<Record<string, { question: string; options: string[] }>>(() => {
+  const map: Record<string, { question: string; options: string[] }> = {}
   for (const q of quizResultStore.questions) {
     map[q.id] = { question: q.question, options: q.options }
   }
@@ -40,7 +40,7 @@ function ringStyle(percent: number): Record<string, string> {
 }
 
 /** Teks pilihan (A/B/C…) dari soal terkait — null bila indeks tak valid. */
-function optionLabel(questionId: number, index: number | null): string {
+function optionLabel(questionId: string, index: number | null): string {
   if (index === null) return 'Tidak dijawab'
   const q = questions.value[questionId]
   const text = q?.options[index]

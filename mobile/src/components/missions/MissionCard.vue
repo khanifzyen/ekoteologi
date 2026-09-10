@@ -13,7 +13,7 @@ import { claimStatusMeta, missionIcon, missionProgress, missionState, missionTyp
 const props = defineProps<{
   mission: Mission
   /** ID misi yang sedang dikirim (utk spinner tombol) — dari induk. */
-  busyId?: number | null
+  busyId?: string | null
 }>()
 
 const emit = defineEmits<{

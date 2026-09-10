@@ -24,7 +24,7 @@ const error = ref('')
 const items = ref<ScanHistoryItem[]>([])
 const total = ref(0)
 const categories = ref<ScanCategoryFull[]>([])
-const activeCategory = ref<number | null>(null)
+const activeCategory = ref<string | null>(null)
 const offset = ref(0)
 const loadingMore = ref(false)
 
@@ -68,7 +68,7 @@ async function load(reset: boolean) {
   }
 }
 
-function setCategory(id: number | null) {
+function setCategory(id: string | null) {
   if (activeCategory.value === id) return
   activeCategory.value = id
   void load(true)

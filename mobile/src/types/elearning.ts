@@ -8,7 +8,7 @@ export interface ModuleProgress {
 }
 
 export interface ModuleCard {
-  id: number
+  id: string
   title: string
   slug: string | null
   description: string | null
@@ -29,7 +29,7 @@ export interface ModulesPage {
 }
 
 export interface LessonBrief {
-  id: number
+  id: string
   title: string | null
   order: number
   done: boolean
@@ -37,13 +37,13 @@ export interface LessonBrief {
 }
 
 export interface QuizQuestion {
-  id: number
+  id: string
   question: string
   options: string[]
 }
 
 export interface QuizIntro {
-  id: number
+  id: string
   question_count: number
   pass_percent: number
   points: number
@@ -59,7 +59,7 @@ export interface QuizBest {
 }
 
 export interface ModuleDetail {
-  id: number
+  id: string
   title: string
   slug: string | null
   description: string | null
@@ -80,15 +80,15 @@ export interface LessonBlock {
 }
 
 export interface LessonDetail {
-  id: number
-  module_id: number
+  id: string
+  module_id: string
   module_title: string
   title: string | null
   order: number
   total_lessons: number
   blocks: LessonBlock[]
   done: boolean
-  next_lesson_id: number | null
+  next_lesson_id: string | null
 }
 
 export interface LessonComplete {
@@ -101,7 +101,7 @@ export interface LessonComplete {
 }
 
 export interface ReviewItem {
-  question_id: number
+  question_id: string
   question: string
   choice: number | null
   answer: number

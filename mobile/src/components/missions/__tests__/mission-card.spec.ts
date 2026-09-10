@@ -9,7 +9,7 @@ import type { Mission } from '@/types/mission'
 
 function makeMission(overrides: Partial<Mission> = {}): Mission {
   return {
-    id: 1,
+    id: '1',
     title: 'Setor 1 kg Plastik ke Bank Sampah',
     description: 'Unggah foto bukti penyerahan sampahmu.',
     type: 'daily',
@@ -28,7 +28,7 @@ const claim = (
   status: 'pending' | 'approved' | 'rejected' | 'in_progress',
   extra = {},
 ) => ({
-  id: 9,
+  id: '9',
   status,
   progress_count: 0,
   points_awarded: 0,
@@ -59,7 +59,7 @@ describe('MissionCard', () => {
 
   it('misi manual sedang dikirim → tombol disabled dengan spinner', () => {
     const wrapper = mount(MissionCard, {
-      props: { mission: makeMission({ verification: 'manual' }), busyId: 1 },
+      props: { mission: makeMission({ verification: 'manual' }), busyId: '1' },
     })
     const btn = wrapper.find('button')
     expect(btn.text()).toContain('Mengklaim…')

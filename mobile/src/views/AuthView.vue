@@ -87,6 +87,8 @@ function pesanKesalahan(err: unknown): string {
 async function onGoogle() {
   try {
     await signInWithGoogle()
+    toast.show('Alhamdulillah, berhasil masuk dengan Google!')
+    await router.replace({ name: 'home' })
   } catch (err) {
     const message =
       err instanceof GoogleSignInUnavailableError

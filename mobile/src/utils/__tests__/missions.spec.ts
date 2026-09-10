@@ -16,7 +16,7 @@ import {
 
 function makeMission(overrides: Partial<Mission> = {}): Mission {
   return {
-    id: 1,
+    id: '1',
     title: 'Setor Plastik',
     description: 'Unggah bukti',
     type: 'daily',
@@ -42,7 +42,7 @@ describe('missionState', () => {
 
   it('klaim pending → waiting, approved → done, rejected → rejected', () => {
     const claim = (status: 'pending' | 'approved' | 'rejected') => ({
-      id: 7,
+      id: '7',
       status,
       progress_count: 0,
       points_awarded: 0,
@@ -76,7 +76,7 @@ describe('missionProgress', () => {
       verification: 'auto_scan',
       required_count: 3,
       my_claim: {
-        id: 1,
+        id: '1',
         status: 'in_progress',
         progress_count: 2,
         points_awarded: 0,
@@ -91,7 +91,7 @@ describe('missionProgress', () => {
     const done = makeMission({
       verification: 'auto_scan',
       my_claim: {
-        id: 1,
+        id: '1',
         status: 'approved',
         progress_count: 3,
         points_awarded: 15,
@@ -113,11 +113,11 @@ describe('weekPercent & countNewMissions', () => {
 
   it('misi baru = belum diklaim atau ditolak', () => {
     const missions = [
-      makeMission({ id: 1 }),
+      makeMission({ id: '1' }),
       makeMission({
-        id: 2,
+        id: '2',
         my_claim: {
-          id: 5,
+          id: '5',
           status: 'rejected',
           progress_count: 0,
           points_awarded: 0,
@@ -126,9 +126,9 @@ describe('weekPercent & countNewMissions', () => {
         },
       }),
       makeMission({
-        id: 3,
+        id: '3',
         my_claim: {
-          id: 6,
+          id: '6',
           status: 'pending',
           progress_count: 0,
           points_awarded: 0,
@@ -167,7 +167,7 @@ describe('describeClaimError', () => {
 
 describe('claimStatusMeta', () => {
   const claim = (status: 'pending' | 'approved' | 'rejected', points = 0) => ({
-    id: 1,
+    id: '1',
     status,
     progress_count: 0,
     points_awarded: points,

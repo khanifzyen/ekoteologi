@@ -3,7 +3,7 @@
 export type MissionVerification = 'photo' | 'auto_scan' | 'manual'
 
 export interface MissionClaim {
-  id: number
+  id: string
   status: 'in_progress' | 'pending' | 'approved' | 'rejected'
   progress_count: number
   points_awarded: number
@@ -12,7 +12,7 @@ export interface MissionClaim {
 }
 
 export interface Mission {
-  id: number
+  id: string
   title: string
   description: string | null
   type: 'daily' | 'weekly' | 'special'
@@ -38,7 +38,7 @@ export interface MissionsPage {
 }
 
 export interface BadgeItem {
-  id: number
+  id: string
   code: string
   name: string | null
   icon: string | null

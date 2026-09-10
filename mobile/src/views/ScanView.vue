@@ -175,7 +175,9 @@ async function analyze(blob: Blob, filename: string) {
     errorContent.value = null
     stage.value = 'result'
     const ms = Math.round(performance.now() - startedAt)
-    latencyText.value = `Analisis dalam ${formatLatency(ms)}${data.cached ? ' · dari cache' : ''}`
+    latencyText.value = data.pending_ai
+      ? 'Foto terunggah — analisis AI menyusul di pembaruan berikutnya.'
+      : `Analisis dalam ${formatLatency(ms)}${data.cached ? ' · dari cache' : ''}`
     recordLatency({ ms, cached: data.cached, at: new Date().toISOString() })
     auth.applyPoints(data.points_total)
     void refreshQuota()
@@ -210,6 +212,8 @@ async function onClaimed() {
   const data = result.value
   if (data && data.points > 0) {
     toast.show(`MasyaAllah! +${data.points} poin masuk.`)
+  } else if (data && data.pending_ai) {
+    toast.show('Foto tersimpan — cek riwayat scanmu.')
   } else if (data) {
     toast.show('Scan tercatat di riwayat — foto sama tidak diberi poin dua kali.')
   }
@@ -540,6 +544,18 @@ function goHome() {
         </div>
 
         <p
+          v-if="result.pending_ai"
+          class="dup-note stag"
+          role="status"
+        >
+          <i
+            class="fas fa-robot"
+            aria-hidden="true"
+          />
+          Foto tersimpan di riwayat — analisis AI (nama objek, saran pilah, dan poin) hadir di pembaruan berikutnya.
+        </p>
+
+        <p
           v-if="result.duplicate"
           class="dup-note stag"
           role="status"
@@ -556,7 +572,10 @@ function goHome() {
           <p>{{ result.advice }}</p>
         </div>
 
-        <div class="quote stag">
+        <div
+          v-if="result.quote"
+          class="quote stag"
+        >
           <p class="trans">
             “{{ result.quote.text }}”
           </p>

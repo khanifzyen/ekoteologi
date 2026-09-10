@@ -33,7 +33,7 @@ const position = computed(() =>
 async function load() {
   error.value = ''
   loading.value = true
-  const lessonId = Number(route.params.lessonId)
+  const lessonId = String(route.params.lessonId)
   try {
     lesson.value = await fetchLesson(lessonId)
   } catch (err) {

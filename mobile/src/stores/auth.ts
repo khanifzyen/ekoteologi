@@ -1,34 +1,38 @@
+/**
+ * Auth store mobile (Sprint 10 — PocketBase SDK).
+ *
+ * Sesi = auth store bawaan SDK (token + record terpersist di localStorage
+ * WebView — token persist & refresh otomatis via `authRefresh` saat sesi
+ * dipulihkan). Profil = gabungan record `users` + agregasi ringan (level dari
+ * koleksi `levels`, hitungan scan/misi/lencana dari koleksi milik user).
+ * Engine poin/ledger/streak sebenarnya hidup di hook (Sprint 11–12).
+ */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { api, bindTokenProvider } from '@/api/client'
+import { ApiError, currentUserId, fileUrl, pb, toApiError } from '@/api/client'
 
 export interface MobileUser {
   id: string
   email: string | null
   full_name: string
   role: string
+  /** URL absolut file avatar PocketBase (null bila belum mengunggah). */
   avatar_url: string | null
   city: string | null
   points: number
 }
 
-interface TokenPair {
-  access_token: string
-  refresh_token: string
-  user: MobileUser
-}
-
 export interface ProfileData extends MobileUser {
   level: number
   level_title: string
-  /** Sprint 5: level berikutnya + streak (opsional — kompatibel server lama). */
+  /** Level berikutnya + streak (kompatibel kontrak UI lama). */
   next_level?: number | null
   next_level_title?: string | null
   next_level_points?: number | null
   current_streak?: number
   longest_streak?: number
-  /** Sprint 6: statistik dampak — kartu "Pohon Kebaikanmu" & layar profil. */
+  /** Statistik dampak — kartu "Pohon Kebaikanmu" & layar profil. */
   scans_total?: number
   missions_approved?: number
   badges_earned?: number
@@ -36,152 +40,196 @@ export interface ProfileData extends MobileUser {
   level_progress?: number | null
 }
 
-const ACCESS_KEY = 'ekoteologi_access'
-const REFRESH_KEY = 'ekoteologi_refresh'
-
-function readKey(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeKey(key: string, value: string | null) {
-  try {
-    if (value === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, value)
-  } catch {
-    /* penyimpanan tidak tersedia — sesi hanya di memori */
-  }
+interface LevelRow {
+  id: string
+  level: number
+  min_points: number
+  title: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const access = ref<string | null>(readKey(ACCESS_KEY))
-  const refresh = ref<string | null>(readKey(REFRESH_KEY))
   const user = ref<MobileUser | null>(null)
   const profile = ref<ProfileData | null>(null)
   /** true setelah percobaan pemulihan sesi awal selesai (sukses/gagal). */
   const sessionRestored = ref(false)
 
-  const isAuthenticated = computed(() => access.value !== null)
+  const isAuthenticated = computed(() => pb.authStore.isValid && user.value !== null)
   const firstName = computed(() => user.value?.full_name.trim().split(/\s+/)[0] ?? '')
 
-  bindTokenProvider({
-    getAccessToken: () => access.value,
-    getRefreshToken: () => refresh.value,
-    onRefreshed: (newAccess, newRefresh) => {
-      access.value = newAccess
-      refresh.value = newRefresh
-      writeKey(ACCESS_KEY, newAccess)
-      writeKey(REFRESH_KEY, newRefresh)
-    },
-    onSessionExpired: () => clearSession(),
-  })
-
-  function setSession(tokens: TokenPair) {
-    access.value = tokens.access_token
-    refresh.value = tokens.refresh_token
-    user.value = tokens.user
-    writeKey(ACCESS_KEY, tokens.access_token)
-    writeKey(REFRESH_KEY, tokens.refresh_token)
-  }
-
-  function clearSession() {
-    access.value = null
-    refresh.value = null
-    user.value = null
-    profile.value = null
-    writeKey(ACCESS_KEY, null)
-    writeKey(REFRESH_KEY, null)
-  }
-
-  async function login(email: string, password: string, remember = true) {
-    const tokens = await api<TokenPair>('/v1/auth/login', {
-      method: 'POST',
-      body: { email, password, remember },
-    })
-    setSession(tokens)
-    sessionRestored.value = true
-  }
-
-  async function register(fullName: string, email: string, password: string) {
-    const tokens = await api<TokenPair>('/v1/auth/register', {
-      method: 'POST',
-      body: { full_name: fullName, email, password },
-    })
-    setSession(tokens)
-    sessionRestored.value = true
-  }
-
-  /** Ambil profil (+level) dari server; aman dipanggil berulang. */
-  async function ensureProfile() {
-    if (!isAuthenticated.value) return
-    if (profile.value && user.value) return
-    const data = await api<ProfileData>('/v1/profile')
-    profile.value = data
-    user.value = {
-      id: data.id,
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role,
-      avatar_url: data.avatar_url,
-      city: data.city,
-      points: data.points,
+  function pickUser(record: Record<string, unknown>): MobileUser {
+    return {
+      id: String(record.id),
+      email: (record.email as string) ?? null,
+      full_name: (record.full_name as string) ?? '',
+      role: (record.role as string) || 'user',
+      avatar_url: fileUrl(record as { id: string }, record.avatar as string),
+      city: (record.city as string) || null,
+      points: Number(record.points ?? 0),
     }
   }
 
-  /** Pulihkan sesi dari localStorage saat aplikasi dibuka. */
+  /** Tangga level → posisi + progres (satu query, dipakai semua layar). */
+  async function loadLevels(): Promise<LevelRow[]> {
+    return pb.collection('levels').getFullList<LevelRow>({ sort: 'level' })
+  }
+
+  function levelInfo(levels: LevelRow[], points: number) {
+    let current = levels[0]
+    let next: LevelRow | null = null
+    for (const row of levels) {
+      if (points >= row.min_points) current = row
+      else if (!next) next = row
+    }
+    const prevMin = current?.min_points ?? 0
+    const progress = next && next.min_points > prevMin
+      ? Math.min(100, Math.round(((points - prevMin) / (next.min_points - prevMin)) * 100))
+      : null
+    return { current, next, progress }
+  }
+
+  /** Total baris milik user pada satu koleksi (count ringan). */
+  async function countOwn(collection: string, filter: string): Promise<number> {
+    const page = await pb.collection(collection).getList(1, 1, {
+      filter,
+      fields: 'id',
+    })
+    return page.totalItems
+  }
+
+  /**
+   * Susun profil lengkap dari record users + agregasi koleksi.
+   * (Agregasi server-side menyusul via route hook — Sprint 11–13.)
+   */
+  async function buildProfile(levels?: LevelRow[]): Promise<ProfileData> {
+    const record = pb.authStore.record as Record<string, unknown> | null
+    if (!record) throw new ApiError(401, 'Sesi berakhir. Silakan masuk lagi.')
+    const base = pickUser(record)
+    const uid = base.id
+    const ladder = levels ?? (await loadLevels())
+    const { current, next, progress } = levelInfo(ladder, base.points)
+    const [scansTotal, missionsApproved, badgesEarned] = await Promise.all([
+      countOwn('scans', `user = "${uid}"`),
+      countOwn('user_missions', `user = "${uid}" && status = "approved"`),
+      countOwn('user_badges', `user = "${uid}"`),
+    ])
+    return {
+      ...base,
+      level: current?.level ?? 1,
+      level_title: current?.title ?? 'Pemula',
+      next_level: next?.level ?? null,
+      next_level_title: next?.title ?? null,
+      next_level_points: next?.min_points ?? null,
+      current_streak: Number(record.current_streak ?? 0),
+      longest_streak: Number(record.longest_streak ?? 0),
+      scans_total: scansTotal,
+      missions_approved: missionsApproved,
+      badges_earned: badgesEarned,
+      level_progress: progress,
+    }
+  }
+
+  function syncFromAuthStore() {
+    const record = pb.authStore.record as Record<string, unknown> | null
+    user.value = record ? pickUser(record) : null
+  }
+  pb.authStore.onChange(() => syncFromAuthStore())
+  syncFromAuthStore()
+
+  async function login(email: string, password: string, remember = true) {
+    // `remember` dipertahankan utk kompatibilitas UI; SDK PocketBase selalu
+    // mempersist sesi di penyimpanan WebView (token persist).
+    void remember
+    try {
+      await pb.collection('users').authWithPassword(email.trim(), password)
+      syncFromAuthStore()
+      profile.value = await buildProfile()
+      sessionRestored.value = true
+    } catch (err) {
+      throw toApiError(err)
+    }
+  }
+
+  /** Daftar → role dipaksa `user` oleh rule+hook server → langsung masuk. */
+  async function register(fullName: string, email: string, password: string) {
+    try {
+      await pb.collection('users').create({
+        email: email.trim(),
+        password,
+        passwordConfirm: password,
+        full_name: fullName.trim(),
+      })
+    } catch (err) {
+      throw toApiError(err)
+    }
+    await login(email, password)
+  }
+
+  /** Ambil profil (+level, statistik) dari server; aman dipanggil berulang. */
+  async function ensureProfile() {
+    if (!isAuthenticated.value) return
+    profile.value = await buildProfile()
+  }
+
+  /**
+   * Pulihkan sesi dari penyimpanan saat aplikasi dibuka + refresh token
+   * otomatis (token PB berumur terbatas — authRefresh memperbarui jika masih
+   * valid, dan mengakhiri sesi bila sudah ditolak server).
+   */
   async function restoreSession() {
-    if (!access.value) {
+    if (!pb.authStore.isValid) {
+      user.value = null
+      profile.value = null
       sessionRestored.value = true
       return
     }
     try {
+      await pb.collection('users').authRefresh()
+      syncFromAuthStore()
       await ensureProfile()
     } catch {
-      /* 401 sudah ditangani auto-refresh; jika tetap gagal (offline), biarkan
-         token tetap — Home akan menampilkan state error dan bisa retry. */
+      // 401 → authStore otomatis dibersihkan SDK; offline → tetap tampilkan
+      // data lokal dan Home yang menangani retry.
+      if (!pb.authStore.isValid) {
+        user.value = null
+        profile.value = null
+      }
     } finally {
       sessionRestored.value = true
     }
   }
 
   async function updateProfile(fields: { full_name?: string; city?: string }) {
-    const data = await api<ProfileData>('/v1/profile', { method: 'PATCH', body: fields })
-    profile.value = data
-    user.value = { ...user.value, ...pickUser(data) }
-    return data
-  }
-
-  async function uploadAvatar(file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-    const data = await api<ProfileData>('/v1/profile/avatar', { method: 'POST', formData })
-    profile.value = data
-    user.value = { ...user.value, ...pickUser(data) }
-    return data
-  }
-
-  function pickUser(data: ProfileData): MobileUser {
-    return {
-      id: data.id,
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role,
-      avatar_url: data.avatar_url,
-      city: data.city,
-      points: data.points,
+    try {
+      const record = await pb.collection('users').update(currentUserId(), fields)
+      user.value = pickUser(record as Record<string, unknown>)
+      profile.value = await buildProfile()
+      return profile.value
+    } catch (err) {
+      throw toApiError(err)
     }
   }
 
-  /** Perbarui total poin dari respons server (mis. `points_total` hasil scan). */
+  /** Unggah avatar (field file `avatar` — maks 2MB, divalidasi server). */
+  async function uploadAvatar(file: File) {
+    try {
+      const form = new FormData()
+      form.append('avatar', file)
+      const record = await pb.collection('users').update(currentUserId(), form)
+      user.value = pickUser(record as Record<string, unknown>)
+      profile.value = await buildProfile()
+      return profile.value
+    } catch (err) {
+      throw toApiError(err)
+    }
+  }
+
+  /** Perbarui total poin dari respons server (mis. hasil scan — Sprint 11). */
   function applyPoints(pointsTotal: number) {
     if (user.value) user.value = { ...user.value, points: pointsTotal }
     if (profile.value) profile.value = { ...profile.value, points: pointsTotal }
   }
 
-  /** Tambah poin delta (mis. klaim misi manual — level bisa berubah → profil disegarkan). */
+  /** Tambah poin delta + segarkan profil (level bisa berubah). */
   function addPoints(delta: number) {
     if (user.value) user.value = { ...user.value, points: user.value.points + delta }
     if (profile.value) profile.value = { ...profile.value, points: profile.value.points + delta }
@@ -191,27 +239,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Ambil profil dari server walau sudah ada di cache (sinkron level/streak). */
   async function refreshProfile() {
     if (!isAuthenticated.value) return
-    const data = await api<ProfileData>('/v1/profile')
-    profile.value = data
-    user.value = {
-      id: data.id,
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role,
-      avatar_url: data.avatar_url,
-      city: data.city,
-      points: data.points,
-    }
+    profile.value = await buildProfile()
   }
 
   function logout() {
-    clearSession()
+    pb.authStore.clear()
+    user.value = null
+    profile.value = null
     sessionRestored.value = true
   }
 
   return {
-    access,
-    refresh,
     user,
     profile,
     sessionRestored,

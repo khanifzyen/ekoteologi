@@ -37,7 +37,7 @@ const badgesLoading = ref(false)
 const badgesError = ref('')
 const tab = ref<'harian' | 'pencapaian'>('harian')
 /** ID misi yang sedang diproses klaim manualnya (spinner per kartu). */
-const busyClaimId = ref<number | null>(null)
+const busyClaimId = ref<string | null>(null)
 
 const percent = computed(() => weekPercent(summary.value.week_done, summary.value.week_total))
 const newCount = computed(() => countNewMissions(missions.value))

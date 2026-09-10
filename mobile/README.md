@@ -47,23 +47,26 @@ Salin `.env.example` → `.env` bila perlu override:
 
 | Var | Default | Keterangan |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8100` | Base URL API (backend PocketBase sejak Sprint 9; swap SDK penuh di Sprint 10). Saat uji di perangkat via Wi-Fi, isi IP LAN mesin dev, mis. `http://192.168.1.10:8100` |
-| `VITE_GOOGLE_CLIENT_ID` | kosong | Web Client ID Google. Kosong → tombol Google memberi pesan bahwa fitur belum aktif |
+| `VITE_PB_URL` | `http://127.0.0.1:8090` | Base URL PocketBase (satu-satunya backend sejak Sprint 10 — semua layar lewat SDK `pocketbase`). Saat uji di perangkat via Wi-Fi, isi IP LAN mesin dev, mis. `http://192.168.1.10:8090` |
+| `VITE_GOOGLE_CLIENT_ID` | kosong | OAuth Client ID Google (web). Kosong → tombol Google memberi pesan bahwa fitur belum aktif |
+| `VITE_GOOGLE_OAUTH_REDIRECT` | kosong | Redirect URI custom scheme utk alur native (`id.ekoteologi.app://oauth/callback`) — didaftarkan di Google Cloud Console |
 
 Alur: splash → onboarding 3 slide (sekali, ditandai `ekoteologi_onboarded` di
 localStorage) → masuk/daftar (`AuthView`, mockup `auth.html`) → beranda.
 Guard router: layar beranda/profil butuh sesi; user yang sudah masuk tidak
 melihat layar masuk lagi.
 
-Sesi: pasangan access+refresh JWT disimpan di localStorage klien
-(`ekoteologi_access` / `ekoteologi_refresh`). `src/api/client.ts` mengulang
-request sekali setelah refresh sukses; gagal → sesi dibuang → kembali ke
-layar masuk. Keluar: tombol di `ProfileView`.
+Sesi: auth store bawaan SDK PocketBase (token + record terpersist di
+localStorage WebView, kunci `pocketbase_auth`). Saat aplikasi dibuka, sesi
+dipulihkan + `authRefresh` (refresh otomatis; token kadaluarsa → sesi dibuang
+→ kembali ke layar masuk). Keluar: tombol di `ProfileView`.
 
-Google Sign-In: endpoint API `/v1/auth/google` sudah siap (verifikasi ID token
-di server). Sisi klien native menunggu (1) OAuth client dari Google Cloud dan
-(2) plugin komunitas yang kompatibel Capacitor 8 (plugin `@codetrix-studio`
-masih peer Capacitor 6) — lihat catatan di `src/services/googleAuth.ts`.
+Google Sign-In (Sprint 10): OAuth2 provider Google bawaan PocketBase. Web =
+popup SDK (`authWithOAuth2`); native = system browser via `@capacitor/browser`
++ deep link custom scheme yang ditangkap `@capacitor/app`, lalu tukar kode via
+`authWithOAuth2Code` (PKCE S256) — alur lengkap di `src/services/googleAuth.ts`.
+Prasyarat: provider `google` aktif di server (env `GOOGLE_CLIENT_ID/SECRET`,
+migrasi settings bootstrap) + OAuth client terdaftar di Google Cloud Console.
 
 ## Scan AI (Sprint 3)
 

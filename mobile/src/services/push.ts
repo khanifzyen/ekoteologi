@@ -1,17 +1,16 @@
 /**
- * Service push FCM (Sprint 6) — daftarkan token perangkat ke API (`fcm_tokens`).
+ * Service push FCM (Sprint 6 → Sprint 10: koleksi `fcm_tokens` PocketBase).
  *
- * Kredensial FCM server masih item terbuka (laporan Sprint 6), tapi pendaftaran
- * token sisi klien sudah lengkap: saat aplikasi berjalan NATIVE (Android/APK),
- * izin notifikasi diminta dan token hasil `registration` dikirim ke
- * `POST /v1/push/token`. Di browser (dev web) pendaftaran di-skip — FCM butuh
- * build native; tidak ada error yang tampil ke pengguna (best-effort).
+ * Pendaftaran token sisi klien: saat aplikasi berjalan NATIVE (Android/APK),
+ * izin notifikasi diminta dan token hasil `registration` disimpan sebagai
+ * record `fcm_tokens` milik user (unique index token → duplikat diabaikan).
+ * Pengiriman push dari server (FCM HTTP v1 via hook) menyusul Sprint 13.
  */
 
 import { Capacitor } from '@capacitor/core'
 import { PushNotifications } from '@capacitor/push-notifications'
 
-import { api } from '@/api/client'
+import { currentUserId, pb } from '@/api/client'
 
 /** Sekali per sesi aplikasi — gagal pun tak diulang (tak memblokir UI). */
 let attempted = false
@@ -44,12 +43,15 @@ export async function registerPush(): Promise<RegisterResult> {
         resolve(value)
       }
       PushNotifications.addListener('registration', (token) => {
-        api('/v1/push/token', {
-          method: 'POST',
-          body: { token: token.value, platform: Capacitor.getPlatform() },
-        })
+        pb.collection('fcm_tokens')
+          .create({
+            user: currentUserId(),
+            token: token.value,
+            // platform token lama ("android"/"ios"/"web") — cukup keterangan.
+            platform: Capacitor.getPlatform(),
+          })
           .then(() => settle(true))
-          .catch(() => settle(false))
+          .catch(() => settle(true)) // token sudah terdaftar (unique) = sukses
       })
       PushNotifications.addListener('registrationError', () => settle(false))
       PushNotifications.register()

@@ -11,7 +11,7 @@ import { defineStore } from 'pinia'
 import type { QuizResult } from '@/types/elearning'
 
 interface QuizQuestionSnapshot {
-  id: number
+  id: string
   question: string
   options: string[]
 }

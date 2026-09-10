@@ -23,7 +23,7 @@ const loading = ref(true)
 const error = ref('')
 const detail = ref<ModuleDetail | null>(null)
 
-const moduleId = computed(() => Number(route.params.moduleId))
+const moduleId = computed(() => String(route.params.moduleId))
 const nextLessonId = computed(
   () => detail.value?.lessons.find((l) => !l.done)?.id ?? detail.value?.lessons[0]?.id ?? null,
 )
@@ -36,8 +36,8 @@ const cta = computed(() => {
   return allDone.value ? 'Ulangi' : modulePercent(detail.value) > 0 ? 'Lanjutkan' : 'Mulai'
 })
 
-function openLesson(lessonId: number) {
-  void router.push({ name: 'pelajaran', params: { lessonId: String(lessonId) } })
+function openLesson(lessonId: string) {
+  void router.push({ name: 'pelajaran', params: { lessonId } })
 }
 
 function openQuiz() {

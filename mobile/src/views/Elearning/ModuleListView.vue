@@ -56,8 +56,8 @@ async function load() {
   }
 }
 
-async function openModule(moduleId: number) {
-  await router.push({ name: 'modul', params: { moduleId: String(moduleId) } })
+async function openModule(moduleId: string) {
+  await router.push({ name: 'modul', params: { moduleId } })
 }
 
 onMounted(() => {

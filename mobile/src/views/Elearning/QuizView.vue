@@ -28,11 +28,11 @@ const quiz = ref<QuizIntro | null>(null)
 const started = ref(false)
 /** Index soal aktif + jawaban terpilih per question_id. */
 const current = ref(0)
-const answers = ref<Record<number, number>>({})
+const answers = ref<Record<string, number>>({})
 const needChoice = ref(false)
 const submitting = ref(false)
 
-const moduleId = computed(() => Number(route.params.moduleId))
+const moduleId = computed(() => String(route.params.moduleId))
 const questions = computed(() => quiz.value?.questions ?? [])
 const activeQuestion = computed(() => questions.value[current.value] ?? null)
 const answeredCount = computed(() => Object.keys(answers.value).length)
@@ -77,7 +77,7 @@ async function submit() {
     const result: QuizResult = await submitQuiz(
       moduleId.value,
       Object.entries(answers.value).map(([questionId, choice]) => ({
-        question_id: Number(questionId),
+        question_id: questionId,
         choice,
       })),
     )
