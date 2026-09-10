@@ -257,7 +257,7 @@ di `docs/release/PLAY-STORE-CHECKLIST.md` §13 dan `.env.example`):
 
 | Run | Commit | Hasil |
 |---|---|---|
-| (commit batch sprint 13) | lihat git | jalankan CI per kebiasaan repo — hasil ditempel menyusul (pola sprint 9–12) |
+| #33 | `7f3dad3` | **Hijau 4/4 job** — Backend PocketBase (lint, 254 asersi pb-test, 51 asersi E2E SDK, smoke), Admin (lint/test/build), Mobile web (lint/test/build), Mobile APK debug (gradlew assembleDebug) |
 
 ## 10. Ke Sprint 14 (Fase 2 — di luar rencana migrasi)
 
