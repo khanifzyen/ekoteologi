@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** URL dasar API FastAPI, mis. http://localhost:8100 */
-  readonly VITE_API_URL?: string
+  /** URL dasar backend PocketBase, mis. http://127.0.0.1:8090 */
+  readonly VITE_PB_URL?: string
 }
 
 interface ImportMeta {

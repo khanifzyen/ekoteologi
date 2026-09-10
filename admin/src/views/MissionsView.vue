@@ -1,21 +1,21 @@
 <script setup lang="ts">
 /**
- * Manajemen Misi (Sprint 4) — CRUD sesuai story rencana: periode, poin, mode
- * verifikasi. Pola form panel + input (konsisten gaya admin). Tulis:
- * admin|editor; hapus: admin. Antrian klaim ditampilkan read-only — aksi
- * approve/reject adalah modul Verifikasi (Sprint 5).
+ * Manajemen Misi (Sprint 4 → Sprint 10) — CRUD sesuai story rencana: periode,
+ * poin, mode verifikasi — kini lewat API koleksi `missions` PocketBase
+ * (rules: tulis admin; antrian klaim dari `user_missions` read-only staff).
+ * Ledger poin & notifikasi hasil verifikasi mengikuti hook (Sprint 12).
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { ApiError, api } from '@/api/client'
+import { pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 interface AdminMission {
-  id: number
+  id: string
   title: string
   description: string | null
   type: string
@@ -30,15 +30,8 @@ interface AdminMission {
   claims_pending: number
 }
 
-interface MissionPageData {
-  items: AdminMission[]
-  total: number
-  limit: number
-  offset: number
-}
-
 interface ClaimRow {
-  id: number
+  id: string
   status: string
   submitted_at: string | null
   consent_at: string | null
@@ -53,6 +46,10 @@ const canWrite = computed(() =>
   auth.user !== null && ['admin', 'editor'].includes(auth.user.role),
 )
 const canDelete = computed(() => auth.user?.role === 'admin')
+
+type ExpandableRow = Record<string, unknown> & {
+  expand?: { user?: Record<string, unknown>; mission?: Record<string, unknown> }
+}
 
 const loading = ref(true)
 const error = ref('')
@@ -72,9 +69,15 @@ const VERIF_LABEL: Record<string, string> = {
   manual: 'Manual (auto-approve)',
 }
 
+/** ISO aman dari format date PB ("YYYY-MM-DD HH:MM:SS.SSSZ"). */
+function iso(value: unknown): string | null {
+  const s = value ? String(value) : ''
+  return s ? s.replace(' ', 'T') : null
+}
+
 // ── Form (create/edit) ──
 const showForm = ref(false)
-const editingId = ref<number | null>(null)
+const editingId = ref<string | null>(null)
 const saving = ref(false)
 const formError = ref('')
 const form = ref({
@@ -90,27 +93,77 @@ const form = ref({
   is_active: true,
 })
 
+/** Hitungan klaim per misi (total & menunggu) — 1 query per misi. */
+async function claimCounts(missionId: string): Promise<{ total: number; pending: number }> {
+  const [all, pending] = await Promise.all([
+    pb.collection('user_missions').getList(1, 1, {
+      filter: `mission = "${missionId}"`,
+      fields: 'id',
+    }),
+    pb.collection('user_missions').getList(1, 1, {
+      filter: `mission = "${missionId}" && status = "submitted"`,
+      fields: 'id',
+    }),
+  ])
+  return { total: all.totalItems, pending: pending.totalItems }
+}
+
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    const [page, claimPage] = await Promise.all([
-      api<MissionPageData>('/v1/admin/missions?limit=50', { token: auth.token }),
-      api<{ items: ClaimRow[]; total: number }>('/v1/admin/claims?status=pending&limit=8', {
-        token: auth.token,
+    const [missionPage, claimPage] = await Promise.all([
+      pb.collection('missions').getList<Record<string, unknown>>(1, 50, { sort: '-created' }),
+      pb.collection('user_missions').getList<ExpandableRow>(1, 8, {
+        filter: 'status = "submitted"',
+        expand: 'user,mission',
+        sort: '-submitted_at',
       }),
     ])
-    items.value = page.items
-    total.value = page.total
-    claims.value = claimPage.items
-    claimsTotal.value = claimPage.total
+    total.value = missionPage.totalItems
+    claimsTotal.value = claimPage.totalItems
+    claims.value = claimPage.items.map((row) => {
+      const user = (row.expand?.user ?? {}) as Record<string, unknown>
+      const mission = (row.expand?.mission ?? {}) as Record<string, unknown>
+      return {
+        id: String(row.id),
+        status: String(row.status ?? ''),
+        submitted_at: iso(row.submitted_at),
+        consent_at: iso(row.consent_at),
+        proof_image_url: null,
+        user: {
+          full_name: String(user.full_name ?? ''),
+          city: (user.city as string) || null,
+        },
+        mission: {
+          title: String(mission.title ?? ''),
+          points: Number(mission.points ?? 0),
+        },
+      }
+    })
+    const withCounts = await Promise.all(
+      missionPage.items.map(async (row) => {
+        const counts = await claimCounts(String(row.id))
+        return {
+          id: String(row.id),
+          title: String(row.title ?? ''),
+          description: (row.description as string) || null,
+          type: String(row.type ?? 'daily'),
+          icon: (row.icon as string) || null,
+          points: Number(row.points ?? 0),
+          verification: String(row.verification ?? 'photo'),
+          required_count: Number(row.required_count ?? 1),
+          start_at: iso(row.start_at),
+          end_at: iso(row.end_at),
+          is_active: row.is_active === true,
+          claims_total: counts.total,
+          claims_pending: counts.pending,
+        } satisfies AdminMission
+      }),
+    )
+    items.value = withCounts
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
@@ -173,11 +226,8 @@ function validate(): string {
   return ''
 }
 
-async function submitForm() {
-  formError.value = validate()
-  if (formError.value) return
-  saving.value = true
-  const payload = {
+function payload() {
+  return {
     title: form.value.title.trim(),
     description: form.value.description.trim() || null,
     type: form.value.type,
@@ -189,27 +239,24 @@ async function submitForm() {
     end_at: form.value.end_at ? new Date(form.value.end_at).toISOString() : null,
     is_active: form.value.is_active,
   }
+}
+
+async function submitForm() {
+  formError.value = validate()
+  if (formError.value) return
+  saving.value = true
   try {
     if (editingId.value === null) {
-      await api('/v1/admin/missions', {
-        method: 'POST',
-        body: payload,
-        token: auth.token,
-      })
+      await pb.collection('missions').create(payload())
       toast.show('Misi baru dibuat.')
     } else {
-      await api(`/v1/admin/missions/${editingId.value}`, {
-        method: 'PATCH',
-        body: payload,
-        token: auth.token,
-      })
+      await pb.collection('missions').update(editingId.value, payload())
       toast.show('Perubahan misi tersimpan.')
     }
     showForm.value = false
     await load()
   } catch (err) {
-    formError.value =
-      err instanceof ApiError ? err.message : 'Terjadi kesalahan saat menyimpan misi.'
+    formError.value = toApiError(err).message
   } finally {
     saving.value = false
   }
@@ -217,15 +264,11 @@ async function submitForm() {
 
 async function toggleActive(m: AdminMission) {
   try {
-    await api(`/v1/admin/missions/${m.id}`, {
-      method: 'PATCH',
-      body: { is_active: !m.is_active },
-      token: auth.token,
-    })
+    await pb.collection('missions').update(m.id, { is_active: !m.is_active })
     toast.show(m.is_active ? `Misi "${m.title}" dinonaktifkan.` : `Misi "${m.title}" diaktifkan.`)
     await load()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal mengubah status misi.')
+    toast.show(toApiError(err).message || 'Gagal mengubah status misi.')
   }
 }
 
@@ -238,11 +281,11 @@ async function removeMission(m: AdminMission) {
     return
   }
   try {
-    await api(`/v1/admin/missions/${m.id}`, { method: 'DELETE', token: auth.token })
+    await pb.collection('missions').delete(m.id)
     toast.show(`Misi "${m.title}" dihapus.`)
     await load()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal menghapus misi.')
+    toast.show(toApiError(err).message || 'Gagal menghapus misi.')
   }
 }
 

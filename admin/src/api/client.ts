@@ -1,5 +1,21 @@
-/** Klien HTTP minimal untuk API FastAPI (tanpa dependensi eksternal). */
+/**
+ * Klien PocketBase untuk panel admin (Sprint 10 — pengganti klien HTTP
+ * FastAPI). Satu instance SDK dibagikan seluruh app; auth store bawaan SDK
+ * mempersist sesi admin di localStorage.
+ *
+ * Kontrak lama yang dipertahankan agar perubahan view minimal:
+ *   - `ApiError` (status, message) hasil konversi `ClientResponseError` SDK.
+ *   - `PB_URL` menggantikan `API_BASE_URL` (URL file kini absolut via
+ *     `fileUrl()` — pengganti `${API_BASE_URL}/uploads/…`).
+ */
+import PocketBase from 'pocketbase'
 
+/** URL dasar backend PocketBase. */
+export const PB_URL: string = import.meta.env.VITE_PB_URL ?? 'http://127.0.0.1:8090'
+
+export const pb = new PocketBase(PB_URL)
+
+/** Error aplikasi: status 0 = luring/gangguan jaringan (paritas klien lama). */
 export class ApiError extends Error {
   status: number
 
@@ -10,96 +26,28 @@ export class ApiError extends Error {
   }
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8100'
-
-interface TokenProvider {
-  getAccessToken: () => string | null
-  getRefreshToken: () => string | null
-  onRefreshed: (access: string, refresh: string) => void
-  onSessionExpired: () => void
-}
-
-let tokenProvider: TokenProvider = {
-  getAccessToken: () => null,
-  getRefreshToken: () => null,
-  onRefreshed: () => {},
-  onSessionExpired: () => {},
-}
-
-/** Dipanggil auth store agar klien bisa melakukan auto-refresh (Sprint 1). */
-export function bindTokenProvider(provider: TokenProvider) {
-  tokenProvider = provider
-}
-
-interface ApiOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  body?: unknown
-  token?: string | null
-  /** Dipakai internal: jangan coba refresh lagi pada retry. */
-  _retried?: boolean
-}
-
-export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const headers: Record<string, string> = {}
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
-  if (options.token) headers['Authorization'] = `Bearer ${options.token}`
-
-  let resp: Response
-  try {
-    resp = await fetch(`${BASE_URL}${path}`, {
-      method: options.method ?? 'GET',
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    })
-  } catch {
-    throw new ApiError(0, 'Tidak dapat terhubung ke server. Periksa koneksi Anda.')
+/** Konversi error apa pun (umumnya ClientResponseError SDK) → ApiError. */
+export function toApiError(err: unknown): ApiError {
+  if (err instanceof ApiError) return err
+  const e = err as { status?: number; response?: { message?: string }; message?: string }
+  const status = typeof e?.status === 'number' ? e.status : 0
+  if (status === 0) {
+    return new ApiError(0, 'Tidak dapat terhubung ke server. Periksa koneksi.')
   }
-
-  if (resp.status === 401 && options.token && !options._retried) {
-    const refreshed = await tryRefresh()
-    if (refreshed) return api<T>(path, { ...options, token: tokenProvider.getAccessToken(), _retried: true })
-  }
-
-  const data = (await resp.json().catch(() => null)) as { detail?: string } & Record<
-    string,
-    unknown
-  >
-  if (!resp.ok) {
-    const detail =
-      typeof data?.detail === 'string' ? data.detail : 'Terjadi kesalahan pada server.'
-    throw new ApiError(resp.status, detail)
-  }
-  return data as T
+  const message = e?.response?.message || e?.message || 'Terjadi kesalahan pada server.'
+  return new ApiError(status, message)
 }
 
-let refreshInFlight: Promise<boolean> | null = null
-
-async function tryRefresh(): Promise<boolean> {
-  const refresh = tokenProvider.getRefreshToken()
-  if (!refresh) return false
-  if (refreshInFlight) return refreshInFlight
-
-  refreshInFlight = (async () => {
-    try {
-      const resp = await fetch(`${BASE_URL}/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
-      })
-      if (!resp.ok) {
-        tokenProvider.onSessionExpired()
-        return false
-      }
-      const data = (await resp.json()) as { access_token: string; refresh_token: string }
-      tokenProvider.onRefreshed(data.access_token, data.refresh_token)
-      return true
-    } catch {
-      return false
-    } finally {
-      refreshInFlight = null
-    }
-  })()
-  return refreshInFlight
+/** URL absolut file record (bukti misi, avatar). */
+export function fileUrl(
+  record: { id: string },
+  filename: string | null | undefined,
+): string | null {
+  if (!record || !filename) return null
+  return pb.files.getURL(record, filename)
 }
 
-export const API_BASE_URL = BASE_URL
+/** Nama koleksi & id user admin yang sedang masuk. */
+export function currentUserId(): string {
+  return pb.authStore.record?.id ?? ''
+}

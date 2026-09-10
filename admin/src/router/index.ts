@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { pb } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -57,13 +58,15 @@ const router = createRouter({
 })
 
 /** Role guard: hanya admin/verifier/editor yang boleh masuk panel. */
+let lastRefreshAt = 0
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   if (to.meta.public) {
     return auth.isAuthenticated ? { name: 'dashboard' } : true
   }
-  if (!auth.token) {
+  if (!pb.authStore.isValid) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (!auth.user) {
@@ -72,6 +75,16 @@ router.beforeEach(async (to) => {
     } catch {
       auth.logout()
       return { name: 'login' }
+    }
+  } else if (Date.now() - lastRefreshAt > 30 * 60 * 1000) {
+    // Refresh otomatis sesi admin (token PB berumur terbatas) — sekali per
+    // 30 menit; gagal (token kadaluarsa) → sesi diakhiri.
+    lastRefreshAt = Date.now()
+    try {
+      await auth.fetchMe()
+    } catch {
+      auth.logout()
+      return { name: 'login', query: { redirect: to.fullPath } }
     }
   }
   if (!auth.isPanelRole) {

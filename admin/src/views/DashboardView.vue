@@ -1,41 +1,29 @@
 <script setup lang="ts">
 /**
- * Dashboard admin (Sprint 3–4) — mockup `admin/index.html` lengkap:
- * 4 KPI cards (pengguna, scan hari ini, antrian verifikasi, Biaya LLM)
- * + 2 chart gaya editorial (scan harian & komposisi kategori).
- * Sumber: `GET /v1/admin/kpi` + `GET /v1/admin/charts` (read-only).
+ * Dashboard admin (Sprint 3–4 → Sprint 10) — 4 KPI + 2 chart gaya editorial.
+ * Sumber kini koleksi PocketBase bawaan: pengguna & antrian verifikasi
+ * dihitung dari `users`/`user_missions` (rules memuat staff). Agregasi lintas
+ * pengguna untuk scan/LLM/cache membutuhkan route kustom `$app.db` dan baru
+ * dibangun Sprint 13 (rencana §5) — kartu terkait tampil jujur "menunggu".
  */
 import { computed, onMounted, ref } from 'vue'
 
-import { ApiError, api } from '@/api/client'
-import ChartBar from '@/components/ChartBar.vue'
+import { pb, toApiError } from '@/api/client'
 import ChartLine from '@/components/ChartLine.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
-import { useAuthStore } from '@/stores/auth'
 
-interface DashboardKpi {
-  users: { total: number; new_7d: number }
-  scans: { today: number; total: number }
-  verification: { pending: number }
-  cache: { hit: number; miss: number; hit_rate: number | null }
-  llm: { cost_month: number; tokens_month: number; budget_monthly: number | null }
-}
-
-interface ChartsData {
-  days: number
-  daily: { date: string; count: number }[]
-  categories: { name: string; count: number; percentage: number }[]
-  categories_total: number
-}
-
-const auth = useAuthStore()
-
-const kpi = ref<DashboardKpi | null>(null)
-const charts = ref<ChartsData | null>(null)
 const loading = ref(true)
 const error = ref('')
+/** KPI terhitung dari koleksi (null saat masih memuat / error). */
+const usersTotal = ref(0)
+const usersNew7d = ref(0)
+const pendingVerifications = ref(0)
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('id-ID').format(value)
+}
 
 const today = computed(() =>
   new Intl.DateTimeFormat('id-ID', {
@@ -46,56 +34,39 @@ const today = computed(() =>
   }).format(new Date()),
 )
 
-const cacheTotal = computed(() => (kpi.value ? kpi.value.cache.hit + kpi.value.cache.miss : 0))
-
+/** 14 label hari terakhir (chart scan harian — nilai diisi setelah Sprint 13). */
+const CHART_DAYS = 14
 const dailyLabels = computed(() =>
-  (charts.value?.daily ?? []).map((d) =>
-    new Date(d.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-  ),
+  Array.from({ length: CHART_DAYS }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (CHART_DAYS - 1 - i))
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+  }),
 )
-const dailyValues = computed(() => (charts.value?.daily ?? []).map((d) => d.count))
-const dailyTotal = computed(() => dailyValues.value.reduce((a, b) => a + b, 0))
-const catLabels = computed(() => (charts.value?.categories ?? []).map((c) => c.name))
-const catValues = computed(() => (charts.value?.categories ?? []).map((c) => c.percentage))
-const cacheFoot = computed(() => {
-  const rate = kpi.value?.cache.hit_rate
-  const detail =
-    kpi.value && cacheTotal.value > 0 ? ` (${kpi.value.cache.hit}/${cacheTotal.value} analisis)` : ''
-  return `Sumber: tabel scans · cache LLM hit rate ${
-    rate === null || rate === undefined ? '—' : `${rate}%`
-  }${detail}`
-})
+const dailyValues = computed(() => Array.from({ length: CHART_DAYS }, () => 0))
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('id-ID').format(value)
-}
-
-/** Gaya mockup: Rp84,5rb / Rp1,2 jt / Rp0. */
-function formatRupiah(value: number): string {
-  const fmt = (n: number, digits = 1) =>
-    new Intl.NumberFormat('id-ID', { maximumFractionDigits: digits }).format(n)
-  if (value >= 1_000_000) return `Rp${fmt(value / 1_000_000)} jt`
-  if (value >= 1_000) return `Rp${fmt(value / 1_000)}rb`
-  return `Rp${fmt(value, 0)}`
+async function countFiltered(collection: string, filter: string): Promise<number> {
+  const page = await pb.collection(collection).getList(1, 1, { filter, fields: 'id' })
+  return page.totalItems
 }
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [k, c] = await Promise.all([
-      api<DashboardKpi>('/v1/admin/kpi', { token: auth.token }),
-      api<ChartsData>('/v1/admin/charts', { token: auth.token }),
+    const since = new Date()
+    since.setDate(since.getDate() - 7)
+    const iso = since.toISOString().replace('T', ' ')
+    const [total, new7d, pending] = await Promise.all([
+      countFiltered('users', ''),
+      countFiltered('users', `created >= "${iso}"`),
+      countFiltered('user_missions', 'status = "submitted"'),
     ])
-    kpi.value = k
-    charts.value = c
+    usersTotal.value = total
+    usersNew7d.value = new7d
+    pendingVerifications.value = pending
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
@@ -110,7 +81,7 @@ onMounted(() => {
   <div class="page-head">
     <div>
       <h1>Dashboard</h1>
-      <p>{{ today }} · ringkasan 7–14 hari terakhir</p>
+      <p>{{ today }} · ringkasan koleksi PocketBase</p>
     </div>
     <BaseButton
       variant="outline"
@@ -171,38 +142,34 @@ onMounted(() => {
   </div>
 
   <!-- KPI + chart (read-only) -->
-  <template v-else-if="kpi && charts">
+  <template v-else>
     <div class="kpi-grid">
       <KpiCard
         icon="fa-users"
         label="Pengguna Terdaftar"
-        :value="formatNumber(kpi.users.total)"
-        :delta="`+${formatNumber(kpi.users.new_7d)} dalam 7 hari`"
+        :value="formatNumber(usersTotal)"
+        :delta="`+${formatNumber(usersNew7d)} dalam 7 hari`"
         tone="up"
       />
       <KpiCard
         icon="fa-camera"
-        label="Total Scan Hari Ini"
-        :value="formatNumber(kpi.scans.today)"
-        :delta="`total ${formatNumber(kpi.scans.total)} scan`"
-        tone="up"
+        label="Total Scan"
+        value="—"
+        delta="menunggu route agregasi (Sprint 13)"
+        tone="neutral"
       />
       <KpiCard
         icon="fa-clipboard-check"
         label="Antrian Verifikasi"
-        :value="formatNumber(kpi.verification.pending)"
+        :value="formatNumber(pendingVerifications)"
         delta="bukti misi menunggu review"
         tone="down"
       />
       <KpiCard
         icon="fa-coins"
         :label="`Biaya LLM (${new Date().toLocaleDateString('id-ID', { month: 'short' })})`"
-        :value="formatRupiah(kpi.llm.cost_month)"
-        :delta="
-          kpi.llm.tokens_month > 0
-            ? `${formatNumber(kpi.llm.tokens_month)} token bulan ini`
-            : 'Rp0 — mode LLM mock'
-        "
+        value="Rp0"
+        delta="mode LLM mock — live menyusul Sprint 11"
         tone="neutral"
       />
     </div>
@@ -211,10 +178,10 @@ onMounted(() => {
       <div class="panel">
         <div class="panel-body chart">
           <div class="chart-kicker">
-            Scan AI · {{ charts.days }} hari terakhir
+            Scan AI · {{ CHART_DAYS }} hari terakhir
           </div>
           <div class="chart-title">
-            {{ dailyTotal > 0 ? `${formatNumber(dailyTotal)} scan dalam ${charts.days} hari terakhir` : 'Belum ada scan tercatat' }}
+            Route agregasi dashboard menyusul (Sprint 13)
           </div>
           <div class="chart-sub">
             Jumlah pemindaian sampah per hari (semua pengguna)
@@ -222,8 +189,8 @@ onMounted(() => {
           <ChartLine
             :labels="dailyLabels"
             :values="dailyValues"
-            :description="`Grafik garis: jumlah scan harian selama ${charts.days} hari, total ${dailyTotal} scan`"
-            :foot="cacheFoot"
+            :description="`Grafik garis: jumlah scan harian selama ${CHART_DAYS} hari (belum terisi)`"
+            foot="Koleksi `scans` hanya terbaca pemiliknya — agregasi lintas pengguna butuh route kustom (Sprint 13)"
           />
         </div>
       </div>
@@ -234,24 +201,14 @@ onMounted(() => {
             Komposisi Kategori · 7 Hari
           </div>
           <div class="chart-title">
-            {{ charts.categories.length > 0 ? `${charts.categories[0].name} mendominasi sampah hasil scan` : 'Belum ada data kategori' }}
+            Menunggu route agregasi dashboard (Sprint 13)
           </div>
           <div class="chart-sub">
-            Persentase kategori dari {{ formatNumber(charts.categories_total) }} scan minggu ini
+            Persentase kategori dari scan minggu ini
           </div>
-          <template v-if="charts.categories.length > 0">
-            <ChartBar
-              :labels="catLabels"
-              :values="catValues"
-              :description="`Grafik batang: komposisi kategori sampah 7 hari dari ${charts.categories_total} scan`"
-              foot="Sumber: tabel scans · join waste_categories"
-            />
-          </template>
-          <p
-            v-else
-            class="chart-empty"
-          >
-            Data kategori muncul setelah ada scan pengguna.
+          <p class="chart-empty">
+            Kategori hasil scan terisi setelah modul scan AI (Sprint 11) dan route
+            agregasi dashboard (Sprint 13) aktif.
           </p>
         </div>
       </div>

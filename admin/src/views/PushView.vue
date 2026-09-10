@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * Composer push (Sprint 8) — story "Admin: composer push (semua/segmen) —
- * role admin saja; audit log". Mengirim satu broadcast ke semua/segmen via
- * `POST /v1/admin/push/broadcast` (server menolak role non-admin, mencatat
- * audit eksplisit, membuat 1 baris broadcast `notifications`, lalu push FCM
- * best-effort ke token segmen). Rekap penerima/token per segmen dipakai
- * sebagai preview sebelum kirim; riwayat broadcast dari payload rekap.
+ * Composer push (Sprint 8 → Sprint 10) — pratinjau segmen dari koleksi
+ * `users` + riwayat broadcast dari koleksi `notifications` (baris user kosong
+ * = broadcast, rules membuatnya terbaca admin). Pengiriman broadcast & push
+ * FCM HTTP v1 dijalankan hook PocketBase dan baru aktif di Sprint 13
+ * (rencana §5) — komposer menampilkan status itu secara jujur.
  */
 import { computed, onMounted, ref } from 'vue'
 
-import { ApiError, api } from '@/api/client'
+import { pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -19,7 +18,6 @@ import {
   BODY_MIN,
   TITLE_MAX,
   TITLE_MIN,
-  broadcastSummary,
   composerError,
   historyLabel,
   type BroadcastResult,
@@ -27,7 +25,7 @@ import {
 } from '@/utils/push'
 
 interface NotificationRow {
-  id: number
+  id: string
   title: string | null
   body: string | null
   type: string | null
@@ -64,30 +62,46 @@ function segmentLabel(key: string): string {
   )
 }
 
-const selectedStat = computed(
-  () => segments.value.find((s) => s.segment === form.value.segment) ?? null,
-)
-
 const fmt = new Intl.NumberFormat('id-ID')
+
+async function countUsers(filter: string): Promise<number> {
+  const page = await pb.collection('users').getList(1, 1, { filter, fields: 'id' })
+  return page.totalItems
+}
 
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    const segResp = await api<{ items: SegmentStat[] }>('/v1/admin/push/segments', {
-      token: auth.token,
+    const since = new Date()
+    since.setDate(since.getDate() - 7)
+    const iso = since.toISOString().replace('T', ' ')
+    const [all, aktif, pasif] = await Promise.all([
+      countUsers('is_active != false'),
+      countUsers(`last_active_date >= "${iso}"`),
+      countUsers(`is_active != false && (last_active_date = "" || last_active_date < "${iso}")`),
+    ])
+    segments.value = [
+      { segment: 'all', label: SEGMENT_FALLBACK.all, recipients: all, tokens: 0 },
+      { segment: 'aktif_7hari', label: SEGMENT_FALLBACK.aktif_7hari, recipients: aktif, tokens: 0 },
+      { segment: 'pasif_7hari', label: SEGMENT_FALLBACK.pasif_7hari, recipients: pasif, tokens: 0 },
+      { segment: 'bertoken', label: SEGMENT_FALLBACK.bertoken, recipients: 0, tokens: 0 },
+    ]
+    const rows = await pb.collection('notifications').getFullList<Record<string, unknown>>({
+      filter: 'user = ""',
+      sort: '-created',
     })
-    segments.value = segResp.items
-    history.value = await api<NotificationRow[]>('/v1/admin/push/history', {
-      token: auth.token,
-    })
+    history.value = rows.slice(0, 20).map((row) => ({
+      id: String(row.id),
+      title: (row.title as string) || null,
+      body: (row.body as string) || null,
+      type: (row.type as string) || null,
+      payload: (row.payload as NotificationRow['payload']) ?? null,
+      read_at: (row.read_at as string) || null,
+      created_at: String(row.created ?? ''),
+    }))
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
@@ -100,29 +114,13 @@ function validate(): string {
 async function send() {
   formError.value = validate()
   if (formError.value) return
-  const stat = selectedStat.value
-  const ringkas = stat
-    ? `${fmt.format(stat.recipients)} penerima · ${fmt.format(stat.tokens)} perangkat`
-    : 'segmen tidak diketahui'
-  if (!confirm(`Kirim push ke ${ringkas}? Tindakan ini tercatat di audit log.`)) return
-
+  // Pengiriman broadcast = hook notifikasi (Sprint 13). Tidak memanggil API
+  // apa pun agar tidak mengklaim keberhasilan palsu.
   sending.value = true
   try {
-    result.value = await api<BroadcastResult>('/v1/admin/push/broadcast', {
-      method: 'POST',
-      body: {
-        title: form.value.title.trim(),
-        body: form.value.body.trim(),
-        segment: form.value.segment,
-      },
-      token: auth.token,
-    })
-    toast.show(broadcastSummary(result.value))
-    form.value = { title: '', body: '', segment: form.value.segment }
-    await load()
-  } catch (err) {
-    formError.value =
-      err instanceof ApiError ? err.message : 'Terjadi kesalahan saat mengirim push.'
+    toast.show(
+      'Pengiriman push aktif di Sprint 13 (hook notifikasi & FCM). Pratinjau segmen tetap tersedia.',
+    )
   } finally {
     sending.value = false
   }
@@ -334,12 +332,12 @@ onMounted(() => {
         role="status"
       >
         <i
-          class="fas fa-circle-check"
+          class="fas fa-circle-info"
           aria-hidden="true"
         />
         <div>
-          <strong>"{{ result.title }}"</strong>
-          <span>{{ broadcastSummary(result) }}</span>
+          <strong>Pengiriman broadcast aktif di Sprint 13</strong>
+          <span>Notifikasi realtime & FCM HTTP v1 dikirim lewat hook PocketBase — pratinjau segmen di atas tetap dipakai saat itu.</span>
         </div>
       </div>
     </div>

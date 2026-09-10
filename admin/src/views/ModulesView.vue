@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * E-Learning (Sprint 7) — CRUD modul + editor blok pelajaran (JSONB) + bank
- * soal kuis sesuai story rencana: "Admin: CRUD modul + editor blok lesson
- * (JSONB) + bank soal". Pola form panel + tabel responsif (konsisten gaya
- * admin Sprint 4/6). Blok mengikuti mockup `elearning.html`: paragraph /
- * quote (arab + terjemah + sumber) / tip. Tulis: admin|editor; hapus: admin.
- * Hapus modul ditolak server 409 bila sudah ada progres pengguna.
+ * E-Learning (Sprint 7 → Sprint 10) — CRUD modul + editor blok pelajaran
+ * (JSON) + bank soal kuis. Sumber: koleksi PocketBase `modules`, `lessons`,
+ * `quizzes`, `quiz_questions` (rules admin+editor). Kuis per modul dibuat
+ * otomatis saat soal pertama ditambahkan (paritas server lama). Penilaian &
+ * poin kuis di sisi hook menyusul Sprint 13.
  */
 import { computed, onMounted, ref } from 'vue'
 
-import { ApiError, api } from '@/api/client'
+import { pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -27,7 +26,7 @@ import {
 } from '@/utils/elearning'
 
 interface AdminModule {
-  id: number
+  id: string
   title: string
   slug: string | null
   description: string | null
@@ -39,16 +38,16 @@ interface AdminModule {
 }
 
 interface AdminLesson {
-  id: number
-  module_id: number
+  id: string
+  module_id: string
   title: string | null
   order: number
   blocks: LessonBlock[]
 }
 
 interface AdminQuestion {
-  id: number
-  quiz_id: number
+  id: string
+  quiz_id: string
   question: string
   options: string[]
   answer: number
@@ -66,18 +65,58 @@ const error = ref('')
 const modules = ref<AdminModule[]>([])
 const publishedCount = computed(() => modules.value.filter((m) => m.is_published).length)
 
+/** Hitung pelajaran & soal per modul lewat query count terkelompok. */
+async function countsPerModule(): Promise<Map<string, { lessons: number; questions: number }>> {
+  const [lessonRows, quizRows, questionRows] = await Promise.all([
+    pb.collection('lessons').getFullList<{ module?: string }>({ fields: 'id,module' }),
+    pb.collection('quizzes').getFullList<{ id?: string; module?: string }>({ fields: 'id,module' }),
+    pb.collection('quiz_questions').getFullList<{ quiz?: string }>({ fields: 'id,quiz' }),
+  ])
+  const quizByModule = new Map<string, string>()
+  for (const quiz of quizRows) quizByModule.set(String(quiz.module ?? ''), String(quiz.id ?? ''))
+  const lessons = new Map<string, number>()
+  const questions = new Map<string, number>()
+  for (const lesson of lessonRows) {
+    const key = String(lesson.module ?? '')
+    lessons.set(key, (lessons.get(key) ?? 0) + 1)
+  }
+  for (const question of questionRows) {
+    const moduleId = [...quizByModule.entries()].find(([, qid]) => qid === String(question.quiz ?? ''))?.[0]
+    if (moduleId) questions.set(moduleId, (questions.get(moduleId) ?? 0) + 1)
+  }
+  const result = new Map<string, { lessons: number; questions: number }>()
+  const keys = new Set([...lessons.keys(), ...quizByModule.keys()])
+  for (const key of keys) {
+    result.set(key, { lessons: lessons.get(key) ?? 0, questions: questions.get(key) ?? 0 })
+  }
+  return result
+}
+
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    modules.value = await api<AdminModule[]>('/v1/admin/modules', { token: auth.token })
+    const [rows, counts] = await Promise.all([
+      pb.collection('modules').getFullList<Record<string, unknown>>({ sort: 'order,created' }),
+      countsPerModule(),
+    ])
+    modules.value = rows.map((row) => {
+      const id = String(row.id)
+      const count = counts.get(id) ?? { lessons: 0, questions: 0 }
+      return {
+        id,
+        title: String(row.title ?? ''),
+        slug: (row.slug as string) || null,
+        description: (row.description as string) || null,
+        cover_url: (row.cover as string) || null,
+        order: Number(row.order ?? 0),
+        is_published: row.is_published === true,
+        lesson_count: count.lessons,
+        question_count: count.questions,
+      }
+    })
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
@@ -89,10 +128,21 @@ onMounted(() => {
 
 // ── Form modul (create/edit) ──
 const showModuleForm = ref(false)
-const editingModuleId = ref<number | null>(null)
+const editingModuleId = ref<string | null>(null)
 const savingModule = ref(false)
 const moduleFormError = ref('')
 const moduleForm = ref({ title: '', slug: '', description: '', cover_url: '', order: 0, is_published: false })
+
+function modulePayload() {
+  return {
+    title: moduleForm.value.title.trim(),
+    slug: moduleForm.value.slug.trim() || null,
+    description: moduleForm.value.description.trim() || null,
+    cover: moduleForm.value.cover_url.trim() || null,
+    order: moduleForm.value.order,
+    is_published: moduleForm.value.is_published,
+  }
+}
 
 function openCreateModule() {
   editingModuleId.value = null
@@ -121,26 +171,18 @@ async function submitModule() {
     return
   }
   savingModule.value = true
-  const payload = {
-    title: moduleForm.value.title.trim(),
-    slug: moduleForm.value.slug.trim() || null,
-    description: moduleForm.value.description.trim() || null,
-    cover_url: moduleForm.value.cover_url.trim() || null,
-    order: moduleForm.value.order,
-    is_published: moduleForm.value.is_published,
-  }
   try {
     if (editingModuleId.value === null) {
-      await api('/v1/admin/modules', { method: 'POST', body: payload, token: auth.token })
+      await pb.collection('modules').create(modulePayload())
       toast.show('Modul dibuat — tambahkan pelajaran & soal.')
     } else {
-      await api(`/v1/admin/modules/${editingModuleId.value}`, { method: 'PATCH', body: payload, token: auth.token })
+      await pb.collection('modules').update(editingModuleId.value, modulePayload())
       toast.show('Perubahan modul tersimpan.')
     }
     showModuleForm.value = false
     await load()
   } catch (err) {
-    moduleFormError.value = err instanceof ApiError ? err.message : 'Gagal menyimpan modul.'
+    moduleFormError.value = toApiError(err).message
   } finally {
     savingModule.value = false
   }
@@ -149,22 +191,60 @@ async function submitModule() {
 async function removeModule(m: AdminModule) {
   if (!confirm(`Hapus modul "${m.title}"? Tindakan ini tercatat di audit log.`)) return
   try {
-    await api(`/v1/admin/modules/${m.id}`, { method: 'DELETE', token: auth.token })
+    await pb.collection('modules').delete(m.id)
     toast.show('Modul dihapus.')
     if (manageId.value === m.id) manageId.value = null
     await load()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal menghapus modul.')
+    // Modul dengan progres pelajaran masih dirujuk → server menolak (rule
+    // relasi), tampilkan pesan server apa adanya.
+    toast.show(toApiError(err).message || 'Gagal menghapus modul.')
   }
 }
 
 // ── Panel kelola modul terpilih (pelajaran + bank soal) ──
-const manageId = ref<number | null>(null)
+const manageId = ref<string | null>(null)
 const manageModule = computed(() => modules.value.find((m) => m.id === manageId.value) ?? null)
 const lessons = ref<AdminLesson[]>([])
 const questions = ref<AdminQuestion[]>([])
 const manageLoading = ref(false)
 const manageError = ref('')
+
+async function fetchLessons(moduleId: string): Promise<AdminLesson[]> {
+  const rows = await pb.collection('lessons').getFullList<Record<string, unknown>>({
+    filter: `module = "${moduleId}"`,
+    sort: 'order,created',
+  })
+  return rows.map((row) => ({
+    id: String(row.id),
+    module_id: String(row.module ?? moduleId),
+    title: (row.title as string) || null,
+    order: Number(row.order ?? 0),
+    blocks: Array.isArray(row.content) ? (row.content as LessonBlock[]) : [],
+  }))
+}
+
+async function fetchQuestions(moduleId: string): Promise<AdminQuestion[]> {
+  const quizzes = await pb.collection('quizzes').getFullList<{ id?: string }>({
+    filter: `module = "${moduleId}"`,
+    fields: 'id',
+  })
+  const quizId = quizzes[0] ? String(quizzes[0].id) : ''
+  if (!quizId) return []
+  const rows = await pb.collection('quiz_questions').getFullList<Record<string, unknown>>({
+    filter: `quiz = "${quizId}"`,
+    sort: 'order,created',
+  })
+  return rows.map((row) => ({
+    id: String(row.id),
+    quiz_id: quizId,
+    question: String(row.question ?? ''),
+    options: (row.options as string[]) ?? [],
+    answer: Number(row.answer ?? 0),
+    explanation: (row.explanation as string) || null,
+    order: Number(row.order ?? 0),
+  }))
+}
 
 async function openManage(m: AdminModule) {
   manageId.value = m.id
@@ -173,26 +253,19 @@ async function openManage(m: AdminModule) {
   lessons.value = []
   questions.value = []
   try {
-    const [ls, qs] = await Promise.all([
-      fetchLessons(m.id),
-      api<AdminQuestion[]>(`/v1/admin/modules/${m.id}/questions`, { token: auth.token }),
-    ])
+    const [ls, qs] = await Promise.all([fetchLessons(m.id), fetchQuestions(m.id)])
     lessons.value = ls
     questions.value = qs
   } catch (err) {
-    manageError.value = err instanceof ApiError ? err.message : 'Gagal memuat materi modul.'
+    manageError.value = toApiError(err).message
   } finally {
     manageLoading.value = false
   }
 }
 
-async function fetchLessons(moduleId: number): Promise<AdminLesson[]> {
-  return api<AdminLesson[]>(`/v1/admin/modules/${moduleId}/lessons`, { token: auth.token })
-}
-
 // ── Editor pelajaran ──
 const showLessonForm = ref(false)
-const editingLessonId = ref<number | null>(null)
+const editingLessonId = ref<string | null>(null)
 const savingLesson = ref(false)
 const lessonFormError = ref('')
 const lessonTitle = ref('')
@@ -238,22 +311,24 @@ async function submitLesson() {
   }
   if (manageId.value === null) return
   savingLesson.value = true
-  const payload = {
+  const body = {
+    module: manageId.value,
     title: lessonTitle.value.trim(),
-    blocks: lessonBlocks.value,
+    content: lessonBlocks.value,
+    order: editingLessonId.value === null ? lessons.value.length : undefined,
   }
   try {
     if (editingLessonId.value === null) {
-      await api(`/v1/admin/modules/${manageId.value}/lessons`, { method: 'POST', body: payload, token: auth.token })
+      await pb.collection('lessons').create(body)
       toast.show('Pelajaran ditambahkan.')
     } else {
-      await api(`/v1/admin/lessons/${editingLessonId.value}`, { method: 'PATCH', body: payload, token: auth.token })
+      await pb.collection('lessons').update(editingLessonId.value, body)
       toast.show('Perubahan pelajaran tersimpan.')
     }
     showLessonForm.value = false
     await reloadManage()
   } catch (e) {
-    lessonFormError.value = e instanceof ApiError ? e.message : 'Gagal menyimpan pelajaran.'
+    lessonFormError.value = toApiError(e).message
   } finally {
     savingLesson.value = false
   }
@@ -262,17 +337,17 @@ async function submitLesson() {
 async function removeLesson(lesson: AdminLesson) {
   if (!confirm(`Hapus pelajaran "${lesson.title ?? lesson.id}"?`)) return
   try {
-    await api(`/v1/admin/lessons/${lesson.id}`, { method: 'DELETE', token: auth.token })
+    await pb.collection('lessons').delete(lesson.id)
     toast.show('Pelajaran dihapus.')
     await reloadManage()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal menghapus pelajaran.')
+    toast.show(toApiError(err).message || 'Gagal menghapus pelajaran.')
   }
 }
 
 // ── Editor soal ──
 const showQuestionForm = ref(false)
-const editingQuestionId = ref<number | null>(null)
+const editingQuestionId = ref<string | null>(null)
 const savingQuestion = ref(false)
 const questionFormError = ref('')
 const questionDraft = ref<QuizQuestionDraft>({ question: '', options: ['', '', '', ''], answer: 0, explanation: '' })
@@ -296,6 +371,17 @@ function openEditQuestion(q: AdminQuestion) {
   showQuestionForm.value = true
 }
 
+/** Kuis per modul dibuat otomatis saat soal pertama (paritas server lama). */
+async function ensureQuiz(moduleId: string): Promise<string> {
+  const quizzes = await pb.collection('quizzes').getFullList<{ id?: string }>({
+    filter: `module = "${moduleId}"`,
+    fields: 'id',
+  })
+  if (quizzes[0]?.id) return String(quizzes[0].id)
+  const created = await pb.collection('quizzes').create({ module: moduleId })
+  return String(created.id)
+}
+
 async function submitQuestion() {
   const err = questionError(questionDraft.value)
   if (err) {
@@ -305,24 +391,31 @@ async function submitQuestion() {
   if (manageId.value === null) return
   savingQuestion.value = true
   const filled = questionDraft.value.options.map((o) => o.trim()).filter((o) => o.length > 0)
-  const payload = {
-    question: questionDraft.value.question.trim(),
-    options: filled,
-    answer: Math.min(questionDraft.value.answer, filled.length - 1),
-    explanation: questionDraft.value.explanation.trim() || null,
-  }
   try {
     if (editingQuestionId.value === null) {
-      await api(`/v1/admin/modules/${manageId.value}/questions`, { method: 'POST', body: payload, token: auth.token })
+      const quizId = await ensureQuiz(manageId.value)
+      await pb.collection('quiz_questions').create({
+        quiz: quizId,
+        question: questionDraft.value.question.trim(),
+        options: filled,
+        answer: Math.min(questionDraft.value.answer, filled.length - 1),
+        explanation: questionDraft.value.explanation.trim() || null,
+        order: questions.value.length,
+      })
       toast.show('Soal ditambahkan ke bank soal.')
     } else {
-      await api(`/v1/admin/questions/${editingQuestionId.value}`, { method: 'PATCH', body: payload, token: auth.token })
+      await pb.collection('quiz_questions').update(editingQuestionId.value, {
+        question: questionDraft.value.question.trim(),
+        options: filled,
+        answer: Math.min(questionDraft.value.answer, filled.length - 1),
+        explanation: questionDraft.value.explanation.trim() || null,
+      })
       toast.show('Perubahan soal tersimpan.')
     }
     showQuestionForm.value = false
     await reloadManage()
   } catch (e) {
-    questionFormError.value = e instanceof ApiError ? e.message : 'Gagal menyimpan soal.'
+    questionFormError.value = toApiError(e).message
   } finally {
     savingQuestion.value = false
   }
@@ -331,11 +424,11 @@ async function submitQuestion() {
 async function removeQuestion(q: AdminQuestion) {
   if (!confirm('Hapus soal ini dari bank soal?')) return
   try {
-    await api(`/v1/admin/questions/${q.id}`, { method: 'DELETE', token: auth.token })
+    await pb.collection('quiz_questions').delete(q.id)
     toast.show('Soal dihapus.')
     await reloadManage()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal menghapus soal.')
+    toast.show(toApiError(err).message || 'Gagal menghapus soal.')
   }
 }
 
@@ -346,10 +439,7 @@ async function reloadManage() {
     // Muat ulang daftar pelajaran & soal tanpa menutup panel.
     manageLoading.value = true
     try {
-      const [ls, qs] = await Promise.all([
-        fetchLessons(current.id),
-        api<AdminQuestion[]>(`/v1/admin/modules/${current.id}/questions`, { token: auth.token }),
-      ])
+      const [ls, qs] = await Promise.all([fetchLessons(current.id), fetchQuestions(current.id)])
       lessons.value = ls
       questions.value = qs
     } finally {

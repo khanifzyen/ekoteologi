@@ -143,17 +143,17 @@ Salin `.env.example` → `.env`:
 
 | Var | Default | Keterangan |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8100` | Base URL API (backend PocketBase sejak Sprint 9; swap SDK penuh di Sprint 10) |
+| `VITE_PB_URL` | `http://127.0.0.1:8090` | Base URL PocketBase (satu-satunya backend sejak Sprint 10 — seluruh panel lewat SDK `pocketbase`) |
 
 ## Struktur
 
 ```
 src/
-├── api/client.ts       # fetch wrapper + ApiError (pesan dari detail backend)
+├── api/client.ts       # instance SDK `pocketbase` + ApiError (konversi ClientResponseError) + fileUrl
 ├── components/         # KpiCard, ChartLine, ChartBar (Sprint 3–4) + komponen inti ui/ (Sprint 0)
 ├── layouts/AdminShell  # sidebar + topbar + drawer (mockup index.html)
-├── router/index.ts     # rute + role guard
-├── stores/             # auth (sesi+role), toast
+├── router/index.ts     # rute + role guard + refresh sesi otomatis (30 menit)
+├── stores/             # auth (sesi+role via authStore SDK), toast
 ├── styles/             # tokens.css (salinan docs/desain), admin.css (mockup), app.css (tambahan)
 ├── utils/chart.ts      # matematika chart (murni, teruji vitest)
 ├── utils/verification.ts # helper layar verifikasi (murni, teruji vitest)

@@ -1,15 +1,16 @@
 <script setup lang="ts">
 /**
- * Manajemen Pengguna (Sprint 4) — mockup `admin/pengguna.html`: tabel user
- * dgn badge role/status, filter chips, pencarian, pagination. Sprint ini
- * read-only (blokir/ubah role menyusul sesuai rencana sprint).
+ * Manajemen Pengguna (Sprint 4 → Sprint 10) — tabel user dgn badge
+ * role/status, filter chips, pencarian, pagination. Sumber: koleksi
+ * `users` PocketBase (list rule: authenticated); level dihitung dari
+ * tangga koleksi `levels` (paritas endpoint agregasi lama).
  */
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { ApiError, api } from '@/api/client'
+import { pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
-import { ROLE_LABEL, useAuthStore } from '@/stores/auth'
+import { ROLE_LABEL } from '@/stores/auth'
 
 interface AdminUser {
   id: string
@@ -33,7 +34,6 @@ interface UsersPageData {
 
 const PAGE_SIZE = 20
 
-const auth = useAuthStore()
 const loading = ref(true)
 const error = ref('')
 const page = ref<UsersPageData | null>(null)
@@ -49,6 +49,13 @@ const filters = [
   { key: 'admin', label: 'Admin', icon: 'fa-shield-halved' },
   { key: 'blocked', label: 'Nonaktif', icon: 'fa-circle-half-stroke' },
 ] as const
+
+interface LevelRow {
+  level: number
+  min_points: number
+  title: string
+}
+const levelLadder = ref<LevelRow[]>([])
 
 const currentPage = computed(() =>
   page.value ? Math.floor(page.value.offset / page.value.limit) + 1 : 1,
@@ -88,6 +95,14 @@ function roleBadgeClass(role: string): string {
   return `badge-${role in ROLE_LABEL ? role : 'user'}`
 }
 
+function levelOf(points: number): LevelRow {
+  let current = levelLadder.value[0]
+  for (const row of levelLadder.value) {
+    if (points >= row.min_points) current = row
+  }
+  return current ?? { level: 1, min_points: 0, title: 'Pemula' }
+}
+
 function setFilter(key: (typeof filters)[number]['key']) {
   activeFilter.value = key
   offset.value = 0
@@ -102,21 +117,43 @@ function gotoPage(p: number) {
 async function load() {
   loading.value = true
   error.value = ''
-  const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset.value) })
+  const clauses: string[] = []
   if (['user', 'verifier', 'editor', 'admin'].includes(activeFilter.value)) {
-    params.set('role', activeFilter.value)
+    clauses.push(`role = "${activeFilter.value}"`)
   }
-  if (activeFilter.value === 'blocked') params.set('status', 'blocked')
-  if (search.value.trim()) params.set('q', search.value.trim())
+  if (activeFilter.value === 'blocked') clauses.push('is_active = false')
+  if (search.value.trim()) {
+    const q = search.value.trim().replace(/"/g, '')
+    clauses.push(`(full_name ~ "${q}" || email ~ "${q}" || city ~ "${q}")`)
+  }
   try {
-    page.value = await api<UsersPageData>(`/v1/admin/users?${params}`, { token: auth.token })
+    if (levelLadder.value.length === 0) {
+      levelLadder.value = await pb.collection('levels').getFullList<LevelRow>({ sort: 'level' })
+    }
+    const result = await pb.collection('users').getList<Record<string, unknown>>(
+      Math.floor(offset.value / PAGE_SIZE) + 1,
+      PAGE_SIZE,
+      { filter: clauses.join(' && '), sort: '-created' },
+    )
+    const items: AdminUser[] = result.items.map((row) => {
+      const points = Number(row.points ?? 0)
+      const level = levelOf(points)
+      return {
+        id: String(row.id),
+        full_name: String(row.full_name ?? ''),
+        email: (row.email as string) ?? null,
+        city: (row.city as string) || null,
+        points,
+        role: (row.role as string) || 'user',
+        is_active: row.is_active !== false,
+        level: level.level,
+        level_title: level.title,
+        created_at: String(row.created ?? ''),
+      }
+    })
+    page.value = { items, total: result.totalItems, limit: PAGE_SIZE, offset: offset.value }
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }

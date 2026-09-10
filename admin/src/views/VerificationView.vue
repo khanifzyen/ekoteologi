@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * Antrian Verifikasi Misi (Sprint 5) — 1:1 mockup `verifikasi.html`:
+ * Antrian Verifikasi Misi (Sprint 5 → Sprint 10) — 1:1 mockup `verifikasi.html`:
  * preview bukti besar + strip antrian, panel detail pengguna/misi, catatan
- * review (wajib saat tolak — AUDIT.md A2), dan keyboard shortcut A (setujui),
- * R (tolak), ←/→ (pindah antrian). Keputusan tercatat audit log (middleware);
- * pengguna menerima notifikasi in-app + poin lewat ledger saat disetujui.
+ * review (wajib saat tolak — AUDIT.md A2), keyboard shortcut A/R/←/→.
+ * Sumber: koleksi `user_missions` PocketBase (rule staff) dgn expand user &
+ * mission; keputusan di-PATCH langsung (audit hook server mencatatnya).
+ * Poin lewat ledger + notifikasi user diisi hook gamifikasi (Sprint 12).
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { API_BASE_URL, ApiError, api } from '@/api/client'
+import { fileUrl, pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -23,7 +24,7 @@ import {
 } from '@/utils/verification'
 
 interface ClaimRow {
-  id: number
+  id: string
   status: string
   progress_count: number
   points_awarded: number
@@ -34,18 +35,21 @@ interface ClaimRow {
   submitted_at: string | null
   reviewed_at: string | null
   user: { id: string; full_name: string; city: string | null }
-  mission: { id: number; title: string; points: number; verification: string; type?: string }
+  mission: { id: string; title: string; points: number; verification: string; type?: string }
   user_claims_total: number
 }
 
-interface ClaimsPageData {
-  items: ClaimRow[]
-  total: number
-  limit: number
-  offset: number
+type ExpandableRow = Record<string, unknown> & {
+  expand?: { user?: Record<string, unknown>; mission?: Record<string, unknown> }
 }
 
 const PAGE_SIZE = 20
+
+/** "YYYY-MM-DD HH:MM:SS.SSSZ" (format date PB) → ISO aman untuk `new Date`. */
+function iso(value: unknown): string | null {
+  const s = value ? String(value) : ''
+  return s ? s.replace(' ', 'T') : null
+}
 
 const auth = useAuthStore()
 const toast = useToastStore()
@@ -64,10 +68,7 @@ const reviewing = ref(false)
 const stageTitle = ref<HTMLElement | null>(null)
 
 const currentItem = computed(() => queue.value[current.value] ?? null)
-const proofSrc = computed(() => {
-  const url = currentItem.value?.proof_image_url
-  return url ? `${API_BASE_URL}${url}` : null
-})
+const proofSrc = computed(() => currentItem.value?.proof_image_url ?? null)
 const subtitle = computed(() => {
   const item = currentItem.value
   if (!item) return ''
@@ -80,40 +81,88 @@ const subtitle = computed(() => {
 /** Sisa bukti di server yang belum termuat di halaman ini. */
 const remaining = computed(() => Math.max(0, pendingTotal.value - queue.value.length))
 
+function mapClaim(row: ExpandableRow): ClaimRow {
+  const user = row.expand?.user ?? {}
+  const mission = row.expand?.mission ?? {}
+  return {
+    id: String(row.id),
+    status: String(row.status ?? ''),
+    progress_count: Number(row.progress_count ?? 0),
+    points_awarded: Number(row.points_awarded ?? 0),
+    proof_image_url: fileUrl(row as { id: string }, row.proof as string),
+    note: (row.note as string) || null,
+    review_note: (row.review_note as string) || null,
+    consent_at: iso(row.consent_at),
+    submitted_at: iso(row.submitted_at),
+    reviewed_at: iso(row.reviewed_at),
+    user: {
+      id: String(user.id ?? ''),
+      full_name: String(user.full_name ?? ''),
+      city: (user.city as string) || null,
+    },
+    mission: {
+      id: String(mission.id ?? ''),
+      title: String(mission.title ?? ''),
+      points: Number(mission.points ?? 0),
+      verification: String(mission.verification ?? 'photo'),
+      type: (mission.type as string) || undefined,
+    },
+    user_claims_total: 0,
+  }
+}
+
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    const page = await api<ClaimsPageData>(
-      `/v1/admin/claims?status=pending&limit=${PAGE_SIZE}`,
-      { token: auth.token },
+    const page = await pb.collection('user_missions').getList<ExpandableRow>(
+      1,
+      PAGE_SIZE,
+      { filter: 'status = "submitted"', expand: 'user,mission', sort: '-submitted_at' },
     )
-    queue.value = page.items
-    pendingTotal.value = page.total
+    const items = page.items.map(mapClaim)
+    queue.value = items
+    pendingTotal.value = page.totalItems
     current.value = 0
     reviewNote.value = ''
+    void fillClaimTotals(items)
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
 }
 
+/** Sejarah klaim per pengguna (count) — best-effort, tidak memblokir UI. */
+async function fillClaimTotals(items: ClaimRow[]) {
+  await Promise.all(
+    items.map(async (item) => {
+      try {
+        const page = await pb.collection('user_missions').getList(1, 1, {
+          filter: `user = "${item.user.id}"`,
+          fields: 'id',
+        })
+        item.user_claims_total = page.totalItems
+      } catch {
+        /* biarkan 0 */
+      }
+    }),
+  )
+}
+
 /** Muat halaman pending berikutnya (dipakai saat antrian halaman habis). */
 async function loadMore(): Promise<boolean> {
   try {
-    const page = await api<ClaimsPageData>(
-      `/v1/admin/claims?status=pending&limit=${PAGE_SIZE}&offset=${queue.value.length}`,
-      { token: auth.token },
+    const page = await pb.collection('user_missions').getList<ExpandableRow>(
+      Math.floor(queue.value.length / PAGE_SIZE) + 1,
+      PAGE_SIZE,
+      { filter: 'status = "submitted"', expand: 'user,mission', sort: '-submitted_at' },
     )
-    queue.value = [...queue.value, ...page.items]
-    pendingTotal.value = page.total
-    return page.items.length > 0
+    const items = page.items.map(mapClaim)
+    queue.value = [...queue.value, ...items]
+    pendingTotal.value = page.totalItems
+    void fillClaimTotals(items)
+    return items.length > 0
   } catch {
     return false
   }
@@ -147,15 +196,18 @@ async function review(decision: ReviewDecision) {
 
   reviewing.value = true
   try {
-    const reviewed = await api<ClaimRow>(`/v1/admin/claims/${item.id}/review`, {
-      method: 'POST',
-      body: { decision, note: reviewNote.value.trim() || null },
-      token: auth.token,
+    const approved = decision === 'approved'
+    await pb.collection('user_missions').update(item.id, {
+      status: approved ? 'approved' : 'rejected',
+      review_note: reviewNote.value.trim() || null,
+      reviewed_by: auth.user?.id ?? null,
+      reviewed_at: new Date().toISOString(),
+      points_awarded: approved ? item.mission.points : 0,
     })
     toast.show(
-      decision === 'approved'
-        ? `Disetujui: ${reviewed.user.full_name} mendapat +${reviewed.points_awarded} poin · tercatat di audit log.`
-        : `Ditolak dengan catatan · ${reviewed.user.full_name} dinotifikasikan.`,
+      approved
+        ? `Disetujui: ${item.user.full_name} direkomendasikan +${item.mission.points} poin — pengiriman lewat ledger & notifikasi menyusul modul gamifikasi (Sprint 12).`
+        : `Ditolak dengan catatan · ${item.user.full_name} dapat mengunggah bukti ulang.`,
     )
     // Keluarkan dari antrian lokal; ambil halaman berikutnya bila habis.
     queue.value = queue.value.filter((c) => c.id !== item.id)
@@ -167,9 +219,7 @@ async function review(decision: ReviewDecision) {
     current.value = nextIndexAfterRemove(current.value, queue.value.length)
     focusCurrent()
   } catch (err) {
-    toast.show(
-      err instanceof ApiError ? err.message : 'Keputusan gagal dikirim — coba lagi.',
-    )
+    toast.show(toApiError(err).message || 'Keputusan gagal dikirim — coba lagi.')
   } finally {
     reviewing.value = false
   }
@@ -339,7 +389,7 @@ onBeforeUnmount(() => {
         >
           <img
             v-if="item.proof_image_url"
-            :src="`${API_BASE_URL}${item.proof_image_url}`"
+            :src="item.proof_image_url"
             alt=""
             width="64"
             height="64"

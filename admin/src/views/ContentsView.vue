@@ -1,23 +1,20 @@
 <script setup lang="ts">
 /**
- * Konten Harian (Sprint 6) — CRUD `daily_contents` (PRD §5.6) sesuai story
- * rencana: "Konten harian: CRUD + penjadwalan (admin)". Penjadwalan MVP =
- * `publish_date` (tanggal tayang; satu konten per hari — UNIQUE): konten
- * bertanggal hari ini tampil di kartu "Kutipan Hari Ini" beranda aplikasi;
- * hari tanpa jadwal otomatis menampilkan kutipan bank terkurasi (server).
- * Pola form panel + tabel responsif (konsisten gaya admin). Tulis:
- * admin|editor; hapus: admin.
+ * Konten Harian (Sprint 6 → Sprint 10) — CRUD `daily_contents` (PRD §5.6):
+ * penjadwalan = `publish_date` (satu konten per hari — unique index; konten
+ * bertanggal ≤ hari ini tampil di kartu "Kutipan Hari Ini" beranda aplikasi).
+ * Sumber: API koleksi PocketBase (rules admin+editor). Gambar = field file.
  */
 import { computed, onMounted, ref } from 'vue'
 
-import { ApiError, api } from '@/api/client'
+import { pb, toApiError } from '@/api/client'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 interface AdminContent {
-  id: number
+  id: string
   publish_date: string
   type: string
   title: string | null
@@ -53,7 +50,7 @@ function todayIso(): string {
 
 // ── Form (create/edit) ──
 const showForm = ref(false)
-const editingId = ref<number | null>(null)
+const editingId = ref<string | null>(null)
 const saving = ref(false)
 const formError = ref('')
 const form = ref({
@@ -63,23 +60,41 @@ const form = ref({
   body: '',
   source: '',
   eco_action: '',
-  image_url: '',
 })
+const imageFile = ref<File | null>(null)
+
+function onImageChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  imageFile.value = input.files?.[0] ?? null
+}
 
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    items.value = await api<AdminContent[]>('/v1/admin/contents?limit=100', {
-      token: auth.token,
+    const rows = await pb.collection('daily_contents').getFullList<Record<string, unknown>>({
+      sort: '-publish_date',
+    })
+    const today = todayIso()
+    items.value = rows.map((row) => {
+      const date = String(row.publish_date ?? today).slice(0, 10)
+      return {
+        id: String(row.id),
+        publish_date: date,
+        type: String(row.type ?? 'refleksi'),
+        title: (row.title as string) || null,
+        body: String(row.body ?? ''),
+        source: (row.source as string) || null,
+        eco_action: (row.eco_action as string) || null,
+        image_url: row.image
+          ? pb.files.getURL(row as unknown as { id: string }, String(row.image))
+          : null,
+        // Paritas kolom is_published lama: tayang = tanggal sudah lewat/hari ini.
+        is_published: date <= today,
+      }
     })
   } catch (err) {
-    error.value =
-      err instanceof ApiError
-        ? err.status === 0
-          ? 'Tidak dapat terhubung ke server. Periksa koneksi.'
-          : err.message
-        : 'Terjadi kesalahan pada server.'
+    error.value = toApiError(err).message
   } finally {
     loading.value = false
   }
@@ -94,8 +109,8 @@ function openCreate() {
     body: '',
     source: '',
     eco_action: '',
-    image_url: '',
   }
+  imageFile.value = null
   formError.value = ''
   showForm.value = true
 }
@@ -109,8 +124,8 @@ function openEdit(c: AdminContent) {
     body: c.body,
     source: c.source ?? '',
     eco_action: c.eco_action ?? '',
-    image_url: c.image_url ?? '',
   }
+  imageFile.value = null
   formError.value = ''
   showForm.value = true
 }
@@ -122,36 +137,42 @@ function validate(): string {
   return ''
 }
 
-async function submitForm() {
-  formError.value = validate()
-  if (formError.value) return
-  saving.value = true
-  const payload = {
+function basePayload() {
+  return {
     publish_date: form.value.publish_date,
     type: form.value.type,
     title: form.value.title.trim() || null,
     body: form.value.body.trim(),
     source: form.value.source.trim() || null,
     eco_action: form.value.eco_action.trim() || null,
-    image_url: form.value.image_url.trim() || null,
   }
+}
+
+async function submitForm() {
+  formError.value = validate()
+  if (formError.value) return
+  saving.value = true
   try {
+    let payload: Record<string, unknown> | FormData = basePayload()
+    if (imageFile.value) {
+      const fd = new FormData()
+      for (const [key, value] of Object.entries(basePayload())) {
+        if (value !== null) fd.append(key, String(value))
+      }
+      fd.append('image', imageFile.value)
+      payload = fd
+    }
     if (editingId.value === null) {
-      await api('/v1/admin/contents', { method: 'POST', body: payload, token: auth.token })
+      await pb.collection('daily_contents').create(payload)
       toast.show('Konten harian dijadwalkan.')
     } else {
-      await api(`/v1/admin/contents/${editingId.value}`, {
-        method: 'PATCH',
-        body: payload,
-        token: auth.token,
-      })
+      await pb.collection('daily_contents').update(editingId.value, payload)
       toast.show('Perubahan konten tersimpan.')
     }
     showForm.value = false
     await load()
   } catch (err) {
-    formError.value =
-      err instanceof ApiError ? err.message : 'Terjadi kesalahan saat menyimpan konten.'
+    formError.value = toApiError(err).message
   } finally {
     saving.value = false
   }
@@ -166,11 +187,11 @@ async function removeContent(c: AdminContent) {
     return
   }
   try {
-    await api(`/v1/admin/contents/${c.id}`, { method: 'DELETE', token: auth.token })
+    await pb.collection('daily_contents').delete(c.id)
     toast.show('Konten harian dihapus.')
     await load()
   } catch (err) {
-    toast.show(err instanceof ApiError ? err.message : 'Gagal menghapus konten.')
+    toast.show(toApiError(err).message || 'Gagal menghapus konten.')
   }
 }
 
@@ -349,14 +370,13 @@ onMounted(() => {
         <label
           class="label"
           for="content-image"
-        >URL gambar (opsional)</label>
+        >Gambar (opsional — JPG/PNG/WebP, maks 5 MB)</label>
         <input
           id="content-image"
-          v-model="form.image_url"
           class="input"
-          type="text"
-          maxlength="1000"
-          placeholder="https://…"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          @change="onImageChange"
         >
       </div>
       <p
