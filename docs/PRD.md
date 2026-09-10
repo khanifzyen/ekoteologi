@@ -2,7 +2,10 @@
 
 > Aplikasi edukasi lingkungan berbasis ekoteologi (teologi + ekologi) dengan gamifikasi dan AI scan sampah.
 >
-> Status: Draft v1.0 — hasil brainstorming
+> Status: **Revisi 1.1** (10 Sep 2026) — backend diganti **PocketBase**; LLM memakai
+> **9Router** (router AI self-hosted, OpenAI-compatible) yang sudah terpasang di VPS pada
+> `127.0.0.1:20128`. MVP pernah dieksekusi dengan FastAPI (sprint 0–8, laporan di
+> `docs/sprint/`); rencana migrasi: `docs/implementation-plan.md` (Sprint 9–13).
 > Target rilis MVP: sesuai scope, tim scrum lengkap
 
 ---
@@ -32,19 +35,19 @@
 ### 2.1 Fondasi
 | Fitur | Keterangan |
 |---|---|
-| Autentikasi | Registrasi/login email + password, Google Sign-In, OTP via WA/SMS (opsional). JWT refresh token. |
+| Autentikasi | Registrasi/login email + password, Google Sign-In, OTP via WA/SMS (opsional). Token auth bawaan PocketBase (refresh via SDK). |
 | Profil | Nama, avatar, kota, statistik dampak personal. |
 | Notifikasi push | FCM. Streak reminder, misi baru, event, approve/reject misi. |
 | PWA/Offline | Cache dasar (halaman + data terakhir) untuk area sinyal lemah. |
 
 ### 2.2 Scan + AI (fitur unggulan)
 - Preview kamera live (`@capacitor-community/camera-preview`) + overlay animasi scan.
-- Kirim foto → FastAPI → LLM vision → hasil JSON:
+- Kirim foto → backend (hook PocketBase) → 9Router (LLM vision) → hasil JSON:
   `{item_name, category, advice, quote, points}`.
 - Simpan riwayat scan per user.
 - Poin otomatis masuk per scan (dengan batas harian).
-- Cache hasil LLM per jenis item (Redis) — instan & hemat biaya.
-- Rate limit per user/hari (nilai ditentukan setelah konfirmasi budget LLM).
+- Cache hasil LLM per jenis item (koleksi `llm_cache` + cache in-memory) — instan & hemat resource.
+- Rate limit per user/hari — proteksi beban 9Router (resource VPS) + anti spam.
 
 ### 2.3 Misi & Aksi Nyata
 - Misi harian/mingguan/spesial dengan reward poin.
@@ -81,7 +84,7 @@ Admin panel web (Vue 3). Role: `admin`, `verifier`, `editor`.
 
 | Modul | Isi |
 |---|---|
-| Dashboard | Statistik user aktif, total scan, retensi, misi terpopuler, biaya LLM. |
+| Dashboard | Statistik user aktif, total scan, retensi, misi terpopuler, penggunaan LLM (token & latency). |
 | Manajemen User | Cari, detail, blokir/unblokir, reset poin, ubah role. |
 | Verifikasi Misi | Antrian bukti foto → approve/reject + catatan. |
 | Konten E-Learning | CRUD modul, pelajaran, bank soal kuis. |
@@ -100,25 +103,32 @@ Admin panel web (Vue 3). Role: `admin`, `verifier`, `editor`.
 
 | Komponen | Teknologi | Catatan |
 |---|---|---|
-| Database | **PostgreSQL** | JSONB utk konten fleksibel. |
-| Backend | **FastAPI (Python)** | SDK LLM Python paling matang; async; Pydantic. |
-| LLM | **Provider vision (mis. GLM-4.5-Flash / GLM-4.6V)** | API OpenAI-compatible. **Konfigurasi via env — model mudah ditukar.** Tidak hardcode. |
-| Cache | Redis | Cache hasil LLM, rate limit, session. |
-| Admin Frontend | **Vue 3 + Vite** + UI lib (Naive UI / Element Plus / shadcn-vue) | SPA. |
-| Mobile | **Vue 3 + Capacitor (Android)** | Plugin: `@capacitor/camera`, `@capacitor/geolocation`, `@capacitor/push-notifications`, `@capacitor-community/camera-preview`. |
-| Push | FCM | |
+| Backend + Database | **PocketBase** *(revisi 1.1 — dulu: FastAPI + PostgreSQL + Redis)* | Satu binary: API koleksi, auth, file storage, realtime, cron, SQLite embedded (`pb_data`). Logika bisnis via `pb_hooks` (JSVM); skema via `pb_migrations`. |
+| LLM | **9Router** — router AI self-hosted di VPS, endpoint `http://127.0.0.1:20128/v1` (OpenAI-compatible; **sudah terpasang**) | Backend memanggil 9Router, bukan provider cloud langsung. Model via env (`LLM_MODEL`, `LLM_FALLBACK_MODEL`) — tidak hardcode; tanpa API key eksternal & tanpa biaya per token. 9Router hanya listen di `127.0.0.1` (tidak terekspos publik). |
+| Cache | Koleksi `llm_cache` + cache in-memory hooks *(dulu: Redis)* | Cache hasil LLM & counter rate limit. |
+| Admin Frontend | **Vue 3 + Vite** + UI lib (Naive UI / Element Plus / shadcn-vue) | SPA + SDK `pocketbase`. |
+| Mobile | **Vue 3 + Capacitor (Android)** | Plugin: `@capacitor/camera`, `@capacitor/geolocation`, `@capacitor/push-notifications`, `@capacitor-community/camera-preview` + SDK `pocketbase`. |
+| Push | FCM | Dikirim dari hook PocketBase (FCM HTTP v1). |
 | Peta | Leaflet + OpenStreetMap | Gratis. |
-| Deploy | VPS / Railway / Fly.io | API + admin satu server; Alembic migrasi. |
+| Deploy | **VPS** *(dulu: VPS/Railway/Fly.io)* | Binary PocketBase + admin satu server — VPS yang sama dengan 9Router; migrasi skema via `pb_migrations`. |
 
 **Kenapa Vue+Capacitor, bukan Flutter:** tidak ada kebutuhan native berat (AR disimulasikan). Kamera/geolokasi/push tersedia sebagai plugin Capacitor. Satu skillset (Vue) untuk mobile + admin. Prototipe HTML/CSS existing dapat diadaptasi.
 
-**Prinsip arsitektur LLM:** App **tidak pernah** memanggil LLM langsung. Semua via FastAPI: API key aman, rate limit per user, caching, logging (`llm_raw`, `llm_meta`), fallback model.
+**Prinsip arsitektur LLM:** App **tidak pernah** memanggil LLM langsung. Semua via backend
+(hook scan PocketBase): 9Router tidak terekspos publik (hanya `127.0.0.1` di VPS), rate limit
+per user, caching, logging (`llm_raw`, `llm_meta`), fallback model. Konfigurasi via env:
+`LLM_MODE` (mock/live), `LLM_BASE_URL=http://127.0.0.1:20128/v1`, `LLM_MODEL`,
+`LLM_FALLBACK_MODEL`.
 
 ---
 
-## 5. Skema Database (PostgreSQL)
+## 5. Skema Data — model logis (dipetakan ke koleksi PocketBase)
 
-> Migration via Alembic. Poin: ledger append-only = sumber kebenaran; `users.points` hanya cache.
+> SQL di bawah adalah model logis warisan skema PostgreSQL (tetap jadi referensi). Di
+> PocketBase tiap tabel menjadi koleksi: `UUID` → record id (text), `BIGSERIAL/SERIAL` →
+> autoid, `TIMESTAMPTZ` → autodate, `JSONB` → field json, `UNIQUE(...)` → unique index,
+> `REFERENCES` → field relasi. Skema diverksikan via `pb_migrations` (bukan Alembic).
+> Poin: ledger append-only = sumber kebenaran; `users.points` hanya cache.
 
 ```
 users ──┬─ point_transactions   (ledger poin)
@@ -408,9 +418,9 @@ CREATE TABLE app_settings (key VARCHAR(50) PRIMARY KEY, value JSONB);
 3. **`UNIQUE(user_id, mission_id, period_date)`** mencegah klaim dobel.
 4. **JSONB** untuk LLM raw/meta, blok lesson, opsi kuis, kriteria badge.
 5. **Soft delete** posts/comments (`deleted_at`).
-6. **Cache LLM** per item di Redis (90% item = sampah umum) — hemat biaya, respons instan.
+6. **Cache LLM** per item di koleksi `llm_cache` + cache in-memory (90% item = sampah umum) — hemat resource 9Router, respons instan.
 7. **Leaderboard** MVP: index `users(points DESC)`; fase 2: agregat + cron.
-8. **Tanpa RLS** — otorisasi di FastAPI service layer + `users.role`.
+8. **Otorisasi via API rules PocketBase** (rule per koleksi + role `users.role`); logika lintas-record di `pb_hooks`.
 
 ---
 
@@ -433,26 +443,33 @@ CREATE TABLE app_settings (key VARCHAR(50) PRIMARY KEY, value JSONB);
 - Reward/redeem
 - PWA offline penuh
 
-**Keputusan terbuka (perlu konfirmasi sebelum dev):**
-1. Scope respons LLM scan: klasifikasi saja vs + saran aksi + quote.
-2. Budget LLM → rate limit scan/user/hari.
-3. Bahasa: Indonesia saja? *(dianggap ya)*
-4. Reward MVP: digital saja? *(dianggap ya — fisik fase 2)*
-5. Hosting: VPS vs managed (Railway/Fly.io).
-6. Privasi: consent foto bukti misi (bisa memuat wajah) + kebijakan retensi/penghapusan.
-7. Verifikasi misi: manual admin vs auto-approve per tipe misi. *(dianggap: sesuai kolom `missions.verification`)*
+**Keputusan yang sudah turun** (sebelumnya terbuka; dipakai sejak eksekusi Sprint 0–8):
+1. Scope respons LLM scan: + saran aksi + quote.
+2. Rate limit scan: 20/user/hari (env `SCAN_DAILY_LIMIT`) — kini fungsinya proteksi beban
+   9Router & anti spam (biaya API per token tidak lagi relevan karena self-hosted).
+3. Bahasa: Indonesia saja.
+4. Reward MVP: digital saja (fisik fase 2).
+5. Hosting: **VPS** — binary PocketBase + admin; **9Router sudah terpasang di VPS yang sama**
+   (`127.0.0.1:20128`).
+6. Privasi: consent foto bukti misi + kebijakan retensi (dibangun Sprint 3–4).
+7. Verifikasi misi: sesuai kolom `missions.verification`.
+
+**Keputusan revisi 1.1:** backend diganti PocketBase (dari FastAPI) — rencana migrasi di
+`docs/implementation-plan.md` Sprint 9–13; LLM via 9Router self-hosted (lihat §4).
 
 ---
 
 ## 7. Epics & Stories (draft sprint planning)
 
 Estimasi relatif: S kecil, M sedang, L besar. Urutan = urutan sprint yang disarankan.
+Revisi 1.1: baris di bawah disesuaikan ke PocketBase agar tetap jadi referensi produk;
+rencana migrasi detail per sprint ada di `docs/implementation-plan.md` (Sprint 9–13).
 
 ### Epic 1 — Fondasi (Sprint 0–1)
 | Story | Poin | Keterangan |
 |---|---|---|
-| Setup repo monorepo (api/, admin/, mobile/) + CI | M | Lint, test, build pipeline. |
-| Setup FastAPI + Alembic + PostgreSQL + Redis | M | Struktur project, konfigurasi env. |
+| Setup repo monorepo (pocketbase/, admin/, mobile/) + CI | M | Lint, test, build pipeline. |
+| Setup PocketBase: koleksi + `pb_migrations` + scaffold `pb_hooks` | M | Struktur, konfigurasi env. |
 | Auth: registrasi/login email, JWT refresh | M | + rate limit login. |
 | Auth: Google Sign-In | S | via Capacitor plugin. |
 | Mobile scaffold: Vue + Capacitor, build APK debug | M | Halaman onboarding → login → home. |
@@ -463,8 +480,8 @@ Estimasi relatif: S kecil, M sedang, L besar. Urutan = urutan sprint yang disara
 | Story | Poin | Keterangan |
 |---|---|---|
 | Endpoint scan: upload foto → LLM → simpan | L | Termasuk retry, fallback model, timeout. |
-| Prompt engineering + schema validasi respons | M | Pydantic; `{item_name, category, advice, quote, points}`. |
-| Cache Redis per item | S | |
+| Prompt engineering + schema validasi respons | M | Validasi manual di hook JSVM; `{item_name, category, advice, quote, points}`. |
+| Cache `llm_cache` per item | S | |
 | Rate limit per user/hari | S | |
 | UI scan: kamera preview + overlay "AR" + hasil panel | L | Plugin camera-preview. |
 | Riwayat scan | S | |
@@ -526,7 +543,7 @@ Estimasi relatif: S kecil, M sedang, L besar. Urutan = urutan sprint yang disara
 - Retensi D7 ≥ 20%; streak rata-rata ≥ 3 hari.
 - Misi: ≥50% user aktif menyelesaikan ≥1 misi/minggu.
 - E-learning: ≥30% user menyelesaikan ≥1 modul.
-- Biaya LLM/user/bulan dalam budget; cache hit rate ≥70%.
+- 9Router sehat di VPS: latency & error rate dalam batas wajar; cache hit rate ≥70%.
 
 ---
 
@@ -534,7 +551,7 @@ Estimasi relatif: S kecil, M sedang, L besar. Urutan = urutan sprint yang disara
 
 | Risiko | Mitigasi |
 |---|---|
-| Biaya LLM membengkak | Cache Redis, rate limit harian, model flash murah, fallback. |
+| Beban 9Router membengkak (resource VPS) | Cache `llm_cache`, rate limit harian, timeout + fallback model; 9Router hanya via `127.0.0.1` (tidak publik). |
 | Hasil LLM tidak akurat/halusinasi quote | Validasi schema ketat; bank quote terkurasi yang dicocokkan via keyword, bukan digenerasi LLM. |
 | Foto bukti misi memuat wajah | Consent saat upload; retensi & hapus atas permintaan. |
 | Spam/poin farming (scan foto sama berulang) | Rate limit, hash foto, cooldown per kategori, badge review anomali di admin. |
@@ -542,4 +559,5 @@ Estimasi relatif: S kecil, M sedang, L besar. Urutan = urutan sprint yang disara
 
 ---
 
-*PRD ini akan diperbarui sebelum sprint 0. Keputusan terbuka di §6 harus ditutup lebih dulu.*
+*Revisi 1.1 menyinkronkan PRD dengan keputusan migrasi PocketBase dan penggunaan 9Router
+self-hosted. Rincian eksekusi per sprint: `docs/implementation-plan.md`.*
