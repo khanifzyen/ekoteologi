@@ -50,4 +50,6 @@ export interface BadgeItem {
 export interface ClaimResponse {
   claim: MissionClaim
   message: string
+  /** Total poin terbaru dari server (klaim manual — sinkron pill header). */
+  points_total?: number
 }

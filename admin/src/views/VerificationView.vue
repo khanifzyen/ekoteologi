@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * Antrian Verifikasi Misi (Sprint 5 → Sprint 10) — 1:1 mockup `verifikasi.html`:
+ * Antrian Verifikasi Misi (Sprint 5 → Sprint 12) — 1:1 mockup `verifikasi.html`:
  * preview bukti besar + strip antrian, panel detail pengguna/misi, catatan
  * review (wajib saat tolak — AUDIT.md A2), keyboard shortcut A/R/←/→.
  * Sumber: koleksi `user_missions` PocketBase (rule staff) dgn expand user &
- * mission; keputusan di-PATCH langsung (audit hook server mencatatnya).
- * Poin lewat ledger + notifikasi user diisi hook gamifikasi (Sprint 12).
+ * mission; keputusan di-PATCH dan dipaksa server: poin = points misi lewat
+ * ledger append-only, reviewed_by/at ditimpa hook, notifikasi in-app +
+ * streak + badge otomatis (engine Sprint 12 di pb_hooks).
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -197,16 +198,15 @@ async function review(decision: ReviewDecision) {
   reviewing.value = true
   try {
     const approved = decision === 'approved'
+    // status/review_note dikirim; points_awarded & reviewed_by/at dipaksa
+    // server (hook): poin = points misi → ledger + notifikasi user otomatis.
     await pb.collection('user_missions').update(item.id, {
       status: approved ? 'approved' : 'rejected',
       review_note: reviewNote.value.trim() || null,
-      reviewed_by: auth.user?.id ?? null,
-      reviewed_at: new Date().toISOString(),
-      points_awarded: approved ? item.mission.points : 0,
     })
     toast.show(
       approved
-        ? `Disetujui: ${item.user.full_name} direkomendasikan +${item.mission.points} poin — pengiriman lewat ledger & notifikasi menyusul modul gamifikasi (Sprint 12).`
+        ? `Disetujui: +${item.mission.points} poin untuk ${item.user.full_name} — ledger & notifikasi terkirim.`
         : `Ditolak dengan catatan · ${item.user.full_name} dapat mengunggah bukti ulang.`,
     )
     // Keluarkan dari antrian lokal; ambil halaman berikutnya bila habis.

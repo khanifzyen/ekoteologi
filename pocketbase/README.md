@@ -42,6 +42,10 @@ auth-with-password`, file: `/api/files/{koleksi}/{id}/{filename}`, realtime SSE:
 | `POST /api/ekoteologi/scan` | user | **Scan AI (sprint 11)** — multipart `image` (JPG/PNG/WebP, maks `SCAN_IMAGE_MAX_MB` default 5 MB) → LLM (mock/live 9Router) → JSON tervalidasi `{item_name, category, advice, quote, points}` → tersimpan + poin via ledger. Respons: `{id, item_name, category, advice, quote, points, points_total, cached, duplicate, image, created_at}`. Foto byte-identikal dari user sama di hari sama → `duplicate=true`, poin 0 (anti poin-farming). Kuota habis → 429 + header `Retry-After` + body `retry_after`. LLM gagal total → 502. |
 | `GET /api/ekoteologi/scan/quota` | user | `{used, limit, remaining, resets_in_seconds}` — penghitung harian server-side (`scan_quota:{uid}:{tanggal}` di `app_settings`; env `SCAN_DAILY_LIMIT` default 20) |
 | `GET /api/ekoteologi/scan/stats` | user | `{hit, miss, total, hit_rate, llm_mode}` — statistik cache (target hit rate ≥70% — PRD §5.10 #6) |
+| `POST /api/ekoteologi/missions/{id}/claim` | user | **Klaim misi (sprint 12)** — `photo`: multipart `proof` (JPG/PNG/WebP, maks `MISSION_IMAGE_MAX_MB` default 5 MB) + `consent=1` (wajib, PRD §9) + `note` opsional → antrian `submitted`; `manual`: JSON kosong → **auto-approve** + poin langsung; `auto_scan` → 400 (progres dari scan). Periode dihitung server (daily/special = hari ini; weekly = Senin; jendela `start_at`–`end_at` divalidasi). Anti dobel: pre-check + unique index `(user, mission, period_date)` → 409 ramah; klaim `rejected` boleh diklaim ulang (baris sama dipakai ulang). Respons: `{claim: {id, status, progress_count, points_awarded, review_note, submitted_at}, message, points_total}` |
+| `GET /api/ekoteologi/badges` | user | Daftar lencana + flag `earned` — dengan **lazy badge sync** (kriteria JSON dievaluasi idempoten dulu — paritas `GET /v1/badges` FastAPI) |
+| `GET /api/ekoteologi/streak` | user | `{current_streak, longest_streak, active_today, last_active_date, bonus_points, bonus_every_days, days_to_bonus, week:[{date,active}]}` — streak efektif + kalender 7 hari dari ledger |
+| `POST /api/ekoteologi/cron/streak-reminder` | admin | Trigger manual pass reminder streak (idempoten per hari) → `{sent}`; versi terjadwal hidup di `cronAdd` (env `STREAK_REMINDER_CRON`) |
 
 Hook sprint 10 (auth, profil & audit — pengganti middleware FastAPI):
 
@@ -83,9 +87,40 @@ Hook sprint 11 (scan & ledger — `pb_hooks/scan.pb.js`):
   `runInTransaction`; dipakai ulang sprint 12 untuk klaim/verifikasi).
   UPDATE/DELETE ledger ditolak total (append-only; rekonsiliasi = baris baru).
   Koleksi terkunci dari API publik (default deny).
+  **Level engine (sprint 12)**: hook yang sama menghitung ulang
+  `users.level`/`level_title` dari tangga `levels.min_points` setiap poin
+  berubah (cache posisi — sumber kebenaran tetap koleksi `levels`).
 
-Route bisnis menyusul: klaim/verifikasi misi + engine gamifikasi (sprint 12),
-kuis & notif (sprint 13).
+Hook sprint 12 (misi, verifikasi & gamifikasi — `pb_hooks/gamification.pb.js`):
+
+- **Engine review klaim** — PATCH `user_missions` hanya untuk staff
+  (verifier/admin; updateRule + guard hook): keputusan `submitted → approved`
+  otomatis memberi poin misi lewat ledger (`points_awarded` & `reviewed_by/at`
+  dipaksa server — klien tak bisa menetapkan poin), notifikasi in-app, event
+  `misi_selesai`, streak berdetak, dan badge on-event; `submitted → rejected`
+  mewajibkan `review_note` dan menotifikasi user. Review ulang ditolak (409).
+- **Progres auto_scan** — hook create `scans`: hanya scan bernilai poin (bukan
+  duplikat) yang memajukan misi `auto_scan` aktif sesuai `scan_category`
+  (kosong = semua kategori); target `required_count` tercapai → klaim
+  auto-approve + poin ledger + notifikasi + event (satu transaksi dgn scan).
+- **Streak harian** — reset lazy (bolong → kembali ke 1 saat aktif lagi;
+  tampilan efektif 0), bonus ledger `source=streak` setiap kelipatan
+  `STREAK_BONUS_EVERY_DAYS` (default 6) sebesar `STREAK_BONUS_POINTS`
+  (default 20; 0 = mati) + notifikasi + event `streak_hari`; idempoten per
+  hari. Memicu: scan bernilai poin, klaim manual, dan approve misi.
+- **Badge engine** — kriteria JSON `{"type","value"}` (scan_count,
+  mission_done, streak rekor, points_earned, quiz_passed) dievaluasi on-event
+  (scan bernilai, approve/klaim manual) + lazy di `GET /api/ekoteologi/badges`;
+  penulisan `user_badges` idempoten (unique index) + notifikasi per lencana
+  baru; kriteria korup/tidak dikenal = tidak diraih (fail-closed).
+- **Cron reminder streak** — `cronAdd` (env `STREAK_REMINDER_CRON`, default
+  `0 8 * * *`) menulis notifikasi in-app utk user aktif kemarin yang belum
+  aktif hari ini (idempoten per hari via guard `app_settings`); pengiriman
+  push FCM menyusul Sprint 13. Trigger manual: route admin.
+- **Proteksi hapus misi** — DELETE `missions` dengan klaim → 409
+  (nonaktifkan saja — jaga riwayat; paritas admin_missions.py FastAPI).
+
+Route bisnis menyusul: kuis & notif realtime/push (sprint 13).
 
 ### Koleksi (port `api/app/models/*` — PRD §5)
 
@@ -105,8 +140,9 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 | `user_badges` | user_badges | pemilik / admin | terkunci — badge engine (sprint 12) |
 | `waste_categories` | waste_categories | publik | admin |
 | `scans` | scans | pemilik | tulis via route scan (sprint 11); immutable bagi klien |
-| `missions` | missions | publik (aktif); admin semua | admin |
-| `user_missions` | user_missions | pemilik + staff (verifier/editor/admin) | create pemilik; update pemilik + verifier/admin |
+| `missions` | missions | publik (aktif); admin semua | admin (admin/editor); hapus ditolak bila ada klaim |
+| `user_missions` | user_missions | pemilik + staff (verifier/editor/admin) | tulis via route klaim (sprint 12); review staff — engine hook |
+| `user_badges` | user_badges | pemilik / admin | terkunci — badge engine (sprint 12) ✅ |
 | `modules` | modules | publik (terbit); admin semua | admin + editor |
 | `lessons` | lessons | modul terbit | admin + editor |
 | `quizzes`, `quiz_questions` | quizzes, quiz_questions | modul terbit | admin + editor |
@@ -138,8 +174,8 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 ## Verifikasi
 
 ```bash
-node pocketbase/scripts/test.mjs    # 98 asersi: skema, seed, rules, audit, rate limit, guard login, scan AI (sprint 11)
-node pocketbase/scripts/e2e-sdk.mjs # 26 asersi E2E alur klien SDK (auth, profil, misi, verifikasi, scan)
+node pocketbase/scripts/test.mjs    # 171 asersi: skema, seed, rules, audit, rate limit, guard login, scan AI, misi+verifikasi+gamifikasi (sprint 12)
+node pocketbase/scripts/e2e-sdk.mjs # 35 asersi E2E alur klien SDK (auth, profil, misi via route, verifikasi, streak, badge, scan)
 node pocketbase/scripts/smoke.mjs   # health + ping
 ```
 

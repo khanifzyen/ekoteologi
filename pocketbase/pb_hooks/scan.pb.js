@@ -1008,7 +1008,34 @@ onRecordCreate((e) => {
     throw new BadRequestError("pengguna ledger tidak ditemukan.")
   }
   const current = user.get("points") || 0
-  user.set("points", current + amount)
+  const newPoints = current + amount
+  user.set("points", newPoints)
+
+  // ── level engine (sprint 12): level tertinggi dgn min_points <= poin
+  //    (paritas services/levels.py — dihitung ulang setiap poin berubah;
+  //    hasilnya di-cache users.level/level_title, sumber kebenaran tetap
+  //    koleksi `levels`). Gabung dgn sinkron poin dalam satu save. ──
+  let newLevel = 1
+  let newTitle = "Pemula"
+  try {
+    const ladder = e.app.findRecordsByFilter("levels", "id != ''", "min_points", 0, 0) || []
+    for (let i = 0; i < ladder.length; i++) {
+      const min = ladder[i].get("min_points") || 0
+      const lvl = ladder[i].get("level") || 1
+      if (min <= newPoints && lvl >= newLevel) {
+        newLevel = lvl
+        newTitle = ladder[i].get("title") || "Pemula"
+      }
+    }
+  } catch (err) {
+    console.log("LEDGER: tangga levels tidak terbaca (level tak diperbarui): " + err)
+  }
+  if (user.get("level") !== newLevel) {
+    user.set("level", newLevel)
+  }
+  if (user.get("level_title") !== newTitle) {
+    user.set("level_title", newTitle)
+  }
   e.app.save(user)
 }, "point_transactions")
 

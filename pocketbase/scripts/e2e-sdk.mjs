@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
  * Sprint 10 — E2E alur klien (SDK `pocketbase`) terhadap instance uji.
+ * Sprint 12 — misi: klaim manual/photo via route hook (auto-approve, anti
+ * dobel, consent), verifikasi admin → poin ledger + notifikasi, badge lazy,
+ * streak (status + kalender), level engine di users.
  *
  * Mensimulasikan persis jalur yang dipakai admin & mobile setelah swap SDK:
  *   1. Registrasi publik → authWithPassword → authStore valid (token persist).
  *   2. authRefresh (pemulihan sesi + refresh otomatis).
  *   3. PATCH profil (nama, kota) + unggah avatar (field file) + getURL → 200.
  *   4. Profil gabungan: levels (posisi level), hitungan scans/klaim/badge.
- *   5. Misi: list misi aktif (publik), klaim manual (user_missions submit).
- *   6. Verifikasi admin: antrian `submitted` (rule staff) → approve.
+ *   5. Misi: klaim manual via route → auto-approve + poin + level; anti dobel.
+ *   6. Verifikasi admin: klaim photo → antrian → approve → ledger+notif+badge.
  *   7. Audit log terisi (admin baca), notifikasi broadcast terbaca user.
  *   8. Logout → authStore bersih.
  *
@@ -154,46 +157,51 @@ async function main() {
     const scans = await pb.collection('scans').getList(1, 1, { filter: `user = "${uid}"`, fields: 'id' })
     check('hitungan scan milik sendiri = 0', scans.totalItems === 0)
 
-    // ── 5. misi: list publik + klaim manual ──
-    console.log('[5] Misi: klaim manual via user_missions')
+    // ── 5. misi: klaim manual via route (auto-approve + poin) ──
+    console.log('[5] Misi: klaim manual via route hook (sprint 12)')
     const su = new PocketBase(BASE)
     await su.collection('_superusers').authWithPassword(SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
     const mission = await su.collection('missions').create({
-      title: 'Misi E2E',
+      title: 'Misi E2E Manual',
       points: 15,
       verification: 'manual',
       is_active: true,
       type: 'daily',
       required_count: 1,
     })
-    const activeMissions = await pb.collection('missions').getFullList({ filter: 'is_active = true' })
-    check('misi aktif terbaca publik', activeMissions.length === 1)
-    const period = `${new Date().toISOString().slice(0, 10)} 00:00:00.000Z`
-    await pb.collection('user_missions').create({
-      user: uid,
-      mission: mission.id,
-      period_date: period,
-      status: 'submitted',
-      submitted_at: new Date().toISOString(),
+    const photoMission = await su.collection('missions').create({
+      title: 'Misi E2E Foto',
+      points: 8,
+      verification: 'photo',
+      is_active: true,
+      type: 'daily',
+      required_count: 1,
     })
+    const activeMissions = await pb.collection('missions').getFullList({ filter: 'is_active = true' })
+    check('misi aktif terbaca publik', activeMissions.length === 2)
+    const manualClaim = await pb.send(`/api/ekoteologi/missions/${mission.id}/claim`, {
+      method: 'POST',
+      body: {},
+      requestKey: null,
+    })
+    check(
+      'klaim manual → auto-approve + pesan poin',
+      manualClaim?.claim?.status === 'approved' && manualClaim?.claim?.points_awarded === 15 && /15 poin/.test(manualClaim?.message || ''),
+      JSON.stringify(manualClaim),
+    )
+    await pb.collection('users').authRefresh()
+    check('poin klaim manual tersinkron (users.points, authRefresh)', pb.authStore.record?.points === 15, `points=${pb.authStore.record?.points}`)
+    check('level terisi engine (15 poin → level 1)', pb.authStore.record?.level === 1 && !!pb.authStore.record?.level_title, JSON.stringify({ level: pb.authStore.record?.level, title: pb.authStore.record?.level_title }))
+    let dupErr = null
     try {
-      await pb.collection('user_missions').create({
-        user: uid,
-        mission: mission.id,
-        period_date: period,
-        status: 'submitted',
-      })
-      check('anti dobel klaim ditolak', false)
+      await pb.send(`/api/ekoteologi/missions/${mission.id}/claim`, { method: 'POST', body: {}, requestKey: null })
     } catch (err) {
-      check('anti dobel klaim ditolak', err?.status === 400)
+      dupErr = err
     }
-    const myClaims = await pb.collection('user_missions').getFullList({ filter: `user = "${uid}"` })
-    check('klaim saya terbaca (status submitted)', myClaims.length === 1 && myClaims[0].status === 'submitted')
+    check('anti dobel klaim → 409 ramah', dupErr?.status === 409 && /(klaim|selesai)/i.test(dupErr?.response?.message || ''), JSON.stringify(dupErr?.response?.message))
 
-    // ── 6. verifikasi admin (antrian + approve) ──
-    // Panel admin login sebagai user ber-role staff (bukan superuser) —
-    // reviewed_by adalah relasi ke koleksi `users`.
-    console.log('[6] Verifikasi admin (rule staff)')
+    // ── 6. verifikasi admin (klaim photo → antrian → approve → ledger+notif) ──
+    console.log('[6] Verifikasi admin (rule staff) + efek engine sprint 12')
     const verifier = new PocketBase(BASE)
     const verifierRecord = await verifier.collection('users').create({
       email: 'verifier@ekoteologi.id',
@@ -206,22 +214,59 @@ async function main() {
     await su.collection('users').update(verifierRecord.id, { role: 'verifier' })
     await verifier.collection('users').authWithPassword('verifier@ekoteologi.id', 'RahasiaKu123')
     check('verifier dipromosikan & masuk', verifier.authStore.record?.role === 'verifier')
+    const proofForm = new FormData()
+    proofForm.append('consent', '1')
+    proofForm.append('proof', new Blob([PNG_1PX], { type: 'image/png' }), 'bukti.png')
+    const photoClaim = await pb.send(`/api/ekoteologi/missions/${photoMission.id}/claim`, {
+      method: 'POST',
+      body: proofForm,
+      requestKey: null,
+    })
+    check('klaim photo → submitted (consent tercatat server)', photoClaim?.claim?.status === 'submitted', JSON.stringify(photoClaim))
+    const photoClaimId = photoClaim?.claim?.id
+    let dupPhotoErr = null
+    try {
+      const f2 = new FormData()
+      f2.append('consent', '1')
+      f2.append('proof', new Blob([PNG_1PX], { type: 'image/png' }), 'bukti.png')
+      await pb.send(`/api/ekoteologi/missions/${photoMission.id}/claim`, { method: 'POST', body: f2, requestKey: null })
+    } catch (err) {
+      dupPhotoErr = err
+    }
+    check('anti dobel klaim photo → 409', dupPhotoErr?.status === 409, JSON.stringify(dupPhotoErr?.response?.message))
     const queue = await verifier.collection('user_missions').getFullList({
       filter: 'status = "submitted"',
       expand: 'user,mission',
     })
-    check('antrian staff terbaca dgn expand', queue.length === 1 && queue[0].expand?.user?.full_name === 'Siti Aminah')
-    await verifier.collection('user_missions').update(queue[0].id, {
+    check(
+      'antrian staff terbaca dgn expand + bukti',
+      queue.length === 1 && queue[0].expand?.user?.full_name === 'Siti Aminah' && typeof queue[0].proof === 'string' && queue[0].proof.length > 0,
+      JSON.stringify(queue.length),
+    )
+    let rejectNoNoteErr = null
+    try {
+      await verifier.collection('user_missions').update(photoClaimId, { status: 'rejected' })
+    } catch (err) {
+      rejectNoNoteErr = err
+    }
+    check('tolak tanpa catatan ditolak server (400)', rejectNoNoteErr?.status === 400, `status ${rejectNoNoteErr?.status}`)
+    await verifier.collection('user_missions').update(photoClaimId, {
       status: 'approved',
-      reviewed_by: verifier.authStore.record?.id,
-      reviewed_at: new Date().toISOString(),
-      points_awarded: 15,
     })
-    const approvedCount = await verifier.collection('user_missions').getList(1, 1, {
-      filter: `user = "${uid}" && status = "approved"`,
-      fields: 'id',
-    })
-    check('approve tersimpan (status approved)', approvedCount.totalItems === 1)
+    const approvedClaim = await verifier.collection('user_missions').getOne(photoClaimId)
+    check('approve tersimpan + poin dipaksa server (8)', approvedClaim.status === 'approved' && approvedClaim.points_awarded === 8 && approvedClaim.reviewed_by === verifier.authStore.record?.id, JSON.stringify({ status: approvedClaim.status, points: approvedClaim.points_awarded }))
+    await pb.collection('users').authRefresh()
+    check('poin approve tersinkron (15+8=23, authRefresh)', pb.authStore.record?.points === 23, `points=${pb.authStore.record?.points}`)
+    const myNotifs = await pb.collection('notifications').getFullList()
+    check('notif "Misi disetujui!" diterima user', myNotifs.some((n) => n.title === 'Misi disetujui!'), JSON.stringify(myNotifs.map((n) => n.title)))
+    const myBadges = await pb.send('/api/ekoteologi/badges', { method: 'GET', requestKey: null })
+    check('badge misi_pertama diraih otomatis', Array.isArray(myBadges) && myBadges.find((b) => b.code === 'misi_pertama')?.earned === true, JSON.stringify(Array.isArray(myBadges) ? myBadges.filter((b) => b.earned).map((b) => b.code) : myBadges))
+    const streak = await pb.send('/api/ekoteologi/streak', { method: 'GET', requestKey: null })
+    check(
+      'streak hidup: aktif hari ini + kalender 7 hari + konfigurasi bonus',
+      streak?.active_today === true && streak?.current_streak >= 1 && streak?.week?.length === 7 && streak?.bonus_every_days === 6,
+      JSON.stringify(streak),
+    )
 
     // ── 7. audit log + broadcast ──
     console.log('[7] Audit log & notifikasi')
@@ -231,7 +276,7 @@ async function main() {
     check('user biasa ditolak baca audit', auditUser.totalItems === 0)
     await su.collection('notifications').create({ title: 'Halo', body: 'broadcast E2E', type: 'info' })
     const notifs = await pb.collection('notifications').getFullList()
-    check('broadcast terbaca user', notifs.length === 1)
+    check('broadcast terbaca user', notifs.some((n) => n.title === 'Halo'), JSON.stringify(notifs.map((n) => n.title)))
 
     // ── 8. scan AI via route kustom (jalur persis mobile — Sprint 11) ──
     console.log('[8] Scan AI: pb.send multipart → hasil + poin + cache + riwayat')
@@ -253,7 +298,7 @@ async function main() {
         typeof scan1?.advice === 'string' &&
         typeof scan1?.quote?.text === 'string' &&
         scan1?.points > 0 &&
-        scan1?.points_total === scan1?.points &&
+        scan1?.points_total === 23 + scan1?.points &&
         scan1?.cached === false &&
         scan1?.duplicate === false,
       JSON.stringify(scan1),

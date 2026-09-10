@@ -15,6 +15,8 @@
 //      per-IP dari migrasi settings bootstrap.
 // Sprint 11 (scan AI & ledger): route scan/quota/stats + hook ledger
 //   `point_transactions` hidup di scan.pb.js (lihat header file itu).
+// Sprint 12 (misi, verifikasi & gamifikasi): route klaim/badges/streak,
+//   engine review, level/streak/badge, cron reminder — gamification.pb.js.
 //
 // PENTING — batasan JSVM v0.40 (plugins/jsvm binds.go, terverifikasi):
 // handler hook dikirim ke Go sebagai SUMBER fungsi (stringify) lalu
@@ -30,7 +32,7 @@
 routerAdd("GET", "/api/ekoteologi/ping", (e) => {
   return e.json(200, {
     name: $os.getenv("EKO_APP_NAME") || "ekoteologi-backend",
-    version: $os.getenv("EKO_APP_VERSION") || "0.1.0-sprint11",
+    version: $os.getenv("EKO_APP_VERSION") || "0.1.0-sprint12",
     time: new Date().toISOString(),
   })
 })

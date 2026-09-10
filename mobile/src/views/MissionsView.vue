@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Layar Misi (Sprint 4–5) — 1:1 mockup `misi.html`: header melengkung dgn
- * panel progres mingguan, tab Harian (kartu misi 4 keadaan) & Pencapaian
- * (lencana), state lengkap (skeleton/empty/error), alur unggah bukti photo
- * (consent PRD §9), tombol "Klaim Poin" misi manual (auto-approve), dan
- * notifikasi hasil verifikasi in-app (chip status kartu — hasil ditandai
- * dibaca setelah daftar dilihat).
+ * Layar Misi (Sprint 4–5, engine Sprint 12) — 1:1 mockup `misi.html`: header
+ * melengkung dgn panel progres mingguan, tab Harian (kartu misi 4 keadaan) &
+ * Pencapaian (lencana), state lengkap (skeleton/empty/error), alur unggah
+ * bukti photo (consent PRD §9), tombol "Klaim Poin" misi manual (server
+ * auto-approve + poin ledger), dan notifikasi hasil verifikasi in-app (chip
+ * status kartu — hasil ditandai dibaca setelah daftar dilihat).
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -97,14 +97,15 @@ onMounted(() => {
   void load()
 })
 
-// ── Alur klaim manual (Sprint 5): tombol "Klaim Poin" → langsung disetujui ──
+// ── Alur klaim manual (Sprint 5 → 12): tombol "Klaim Poin" — server auto-
+// approve + poin lewat ledger; total poin terbaru diambil dari respons. ──
 async function submitManualClaim(mission: Mission) {
   if (busyClaimId.value !== null) return
   busyClaimId.value = mission.id
   try {
     const result = await claimManual(mission.id)
-    const awarded = result.claim.points_awarded
-    if (awarded > 0) auth.addPoints(awarded)
+    if (typeof result.points_total === 'number') auth.applyPoints(result.points_total)
+    else if (result.claim.points_awarded > 0) auth.addPoints(result.claim.points_awarded)
     toast.show(result.message)
     void load()
   } catch (err) {

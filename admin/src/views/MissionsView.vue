@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
- * Manajemen Misi (Sprint 4 → Sprint 10) — CRUD sesuai story rencana: periode,
- * poin, mode verifikasi — kini lewat API koleksi `missions` PocketBase
- * (rules: tulis admin; antrian klaim dari `user_missions` read-only staff).
- * Ledger poin & notifikasi hasil verifikasi mengikuti hook (Sprint 12).
+ * Manajemen Misi (Sprint 4 → Sprint 12) — CRUD sesuai story rencana: periode,
+ * poin, mode verifikasi — lewat API koleksi `missions` PocketBase (rules: tulis
+ * admin; hapus ditolak server bila sudah ada klaim). Klaim user lahir lewat
+ * route hook (`POST /api/ekoteologi/missions/{id}/claim`): periode + anti dobel
+ * + consent server-side; poin klaim mengalir lewat ledger + notifikasi (engine
+ * Sprint 12 di pb_hooks).
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
