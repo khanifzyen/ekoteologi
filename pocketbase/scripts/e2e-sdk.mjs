@@ -23,13 +23,23 @@ import path from 'node:path'
 import os from 'node:os'
 import net from 'node:net'
 
+// SDK diimpor dari dependensi workspace yang sudah ada (admin → mobile →
+// resolusi standar). Job CI backend menjalankan `npm ci` admin sebelum step ini.
 const require = createRequire(import.meta.url)
-const PocketBase = require(path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../admin/node_modules/pocketbase',
-)).default
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+function loadPocketBase() {
+  for (const base of ['../../admin', '../../mobile', '..']) {
+    try {
+      return require(path.resolve(HERE, base, 'node_modules/pocketbase')).default
+    } catch {
+      /* coba lokasi berikutnya */
+    }
+  }
+  return require('pocketbase').default
+}
+const PocketBase = loadPocketBase()
 
-const DIR = path.dirname(fileURLToPath(import.meta.url))
+const DIR = HERE
 const PB_DIR = path.resolve(DIR, '..')
 const PB_BIN = process.env.PB_BIN || path.join(PB_DIR, 'pocketbase')
 const PORT = Number(process.env.PB_E2E_PORT || 19090 + (process.pid % 400))

@@ -42,6 +42,9 @@ jobs:
           ./pocketbase/pocketbase --version
       - name: Test integrasi (migrasi, seed, API rules — instance uji sekali pakai)
         run: node pocketbase/scripts/test.mjs
+      - name: Install SDK pocketbase (dependensi admin — utk E2E klien)
+        run: npm ci
+        working-directory: admin
       - name: E2E alur klien SDK (auth, profil, misi, verifikasi)
         run: node pocketbase/scripts/e2e-sdk.mjs
       - name: Smoke health + ping
