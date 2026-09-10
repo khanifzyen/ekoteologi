@@ -40,7 +40,7 @@ Bukti cepat (kriteria demo Sprint 9):
 |---|---|
 | Daftar koleksi sesuai skema lama di Dashboard PB | ✅ 29/29 koleksi terverifikasi via `GET /api/collections` (asersi otomatis test.mjs §2): users (auth), fcm_tokens, levels, point_transactions, badges, user_badges, waste_categories, scans, missions, user_missions (+consent_at), modules, lessons, quizzes, quiz_questions, user_module_progress, user_quiz_attempts, daily_contents, posts, post_likes, post_comments, reports, map_locations, rewards, redemptions, notifications, audit_logs, analytics_events, app_settings, llm_cache |
 | PocketBase jalan lokal | ✅ `make pb-serve` (binary) dan `docker compose up -d` (service `pocketbase` v0.40.3, volume `pb_data`, healthcheck) — keduanya teruji: `/api/health` 200, seed terbaca via API publik |
-| CI hijau job `backend` | ✅ Ekuivalen lokal lulus penuh (lint JS, sinkronisasi pin, unduh binary pin, 42 asersi, smoke) — job `backend` baru berjalan di GitHub Actions setelah push laporan ini; hasil run dicatat commit terpisah sesuai konvensi repo |
+| CI hijau job `backend` | ✅ Run **#22** pada `1e4a3d1` — 4/4 job hijau (backend, admin, mobile, android-apk); semua step job `backend` sukses: sinkron pin, lint JS, unduh binary v0.40.3, test integrasi 42 asersi, smoke. Catatan: run #21 (`4f32e3f`, commit docs sebelum cut-over, masih job `api` lama) gagal di pytest — commit itu hanya menambah docs (PRD/rencana/manual-book), penyebab tak ter-analisis (log butuh auth; job `api` lenyap di commit sprint 9 ini); tidak memengaruhi master saat ini |
 | ~~Login admin Vue via PocketBase~~ | ➡️ Digeser ke Sprint 10 — swap koneksi klien dilarang di sprint ini (instruksi koordinator; di rencana, "auth store PB" & "swap SDK" memang story Sprint 10). Pengganti terukur sprint ini: alur auth `users` diuji langsung via HTTP (registrasi publik terjaga role, auth-with-password, guard anti-eskalasi) — test.mjs §4 |
 
 ---
@@ -123,9 +123,9 @@ Bukti cepat (kriteria demo Sprint 9):
   swap SDK admin" memang milik Sprint 10 (1p + 3p). Tidak ada pekerjaan Sprint 10
   yang dikerjakan duluan. Pengganti terukur: alur auth & rules `users` terverifikasi
   via HTTP otomatis (registrasi terjaga role, login, guard eskalasi).
-- **CI GitHub Actions** untuk commit sprint ini berjalan setelah push; seluruh
-  perintah yang dijalankan job `backend` sudah lulus identik di lokal (§6). Hasil
-  run dicatat sebagai commit `docs(sprint)` terpisah sesuai konvensi repo.
+- **CI GitHub Actions**: run #22 (`1e4a3d1`) hijau 4/4 job, termasuk job `backend`
+  baru. Run #21 (`4f32e3f`) gagal pada job `api` LAMA (pytest coverage) — commit itu
+  hanya docs, diarsipkan; master kini memakai job `backend` yang hijau.
 - Sebelum sprint ini, ada perubahan docs yang belum ter-commit (revisi rencana +
   PRD migrasi, manual book sprint 8) — di-commit terpisah di awal sprint (`8883097`,
   `4f32e3f`) agar basis tag `fastapi-archive` bersih.
