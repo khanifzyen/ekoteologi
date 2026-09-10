@@ -39,6 +39,9 @@ auth-with-password`, file: `/api/files/{koleksi}/{id}/{filename}`, realtime SSE:
 | Route | Auth | Keterangan |
 |---|---|---|
 | `GET /api/ekoteologi/ping` | publik | name/version/time — dipakai smoke CI |
+| `POST /api/ekoteologi/scan` | user | **Scan AI (sprint 11)** — multipart `image` (JPG/PNG/WebP, maks `SCAN_IMAGE_MAX_MB` default 5 MB) → LLM (mock/live 9Router) → JSON tervalidasi `{item_name, category, advice, quote, points}` → tersimpan + poin via ledger. Respons: `{id, item_name, category, advice, quote, points, points_total, cached, duplicate, image, created_at}`. Foto byte-identikal dari user sama di hari sama → `duplicate=true`, poin 0 (anti poin-farming). Kuota habis → 429 + header `Retry-After` + body `retry_after`. LLM gagal total → 502. |
+| `GET /api/ekoteologi/scan/quota` | user | `{used, limit, remaining, resets_in_seconds}` — penghitung harian server-side (`scan_quota:{uid}:{tanggal}` di `app_settings`; env `SCAN_DAILY_LIMIT` default 20) |
+| `GET /api/ekoteologi/scan/stats` | user | `{hit, miss, total, hit_rate, llm_mode}` — statistik cache (target hit rate ≥70% — PRD §5.10 #6) |
 
 Hook sprint 10 (auth, profil & audit — pengganti middleware FastAPI):
 
@@ -46,13 +49,43 @@ Hook sprint 10 (auth, profil & audit — pengganti middleware FastAPI):
   (dan percobaan masuk yang diblokir) tercatat di `audit_logs` (tulis konteks
   sistem, baca admin) via `onRecord{Create,Update,Delete}Request` +
   `onRecordAuthRequest`. Field sensitif (`password`, `tokenKey`) tidak
-  pernah ikut dalam `diff`.
+  pernah ikut dalam `diff`. Aksi `POST /api/ekoteologi/scan` tercatat sbg
+  `action=scan` (pembuatan record via konteks internal tidak memicu hook
+  request, jadi route menulis baris auditnya sendiri).
 - **Guard login per-identitas** — 10 percobaan / 15 menit / email (login
   sukses mereset), hitungan di `app_settings` (`login_guard:{email}`); blokir
   = 429 berbahasa Indonesia + audit `login_failed rate_limited`.
 
-Route bisnis menyusul: scan AI (sprint 11), klaim/verifikasi + ledger
-(sprint 12), kuis & notif (sprint 13).
+Hook sprint 11 (scan & ledger — `pb_hooks/scan.pb.js`):
+
+- **Adapter LLM di JSVM** — `LLM_MODE=mock` (default dev/test): item
+  deterministik dari digest foto → hasil sama = cache teruji end-to-end.
+  `LLM_MODE=live`: `$http.send` → **9Router** self-hosted
+  (`LLM_BASE_URL=http://127.0.0.1:20128/v1`, OpenAI-compatible, tanpa API key)
+  dengan `LLM_MODEL` + `LLM_FALLBACK_MODEL`, retry per model
+  (`LLM_MAX_RETRIES`, backoff via `sleep()`), timeout (`LLM_TIMEOUT_SECONDS`),
+  parsing toleran (respons 9Router bisa berakhiran `data: [DONE]`), dan
+  validasi ketat hasil LLM (schema + kategori harus ada di
+  `waste_categories`; gagal = percobaan ulang/fallback, tak pernah ke DB).
+  Quote LLM SELALU diganti bank quote terkurasi per kategori (anti-halusinasi,
+  PRD §9). Aplikasi klien tidak pernah memanggil LLM langsung.
+- **Cache `llm_cache`** (pengganti Redis) — L1 `$app.store()` (in-memory
+  lintas executor, string JSON + TTL) + L2 koleksi `llm_cache`
+  (`key = "scan:"+sha256(base64(foto))`, `value`, `expires`;
+  `SCAN_CACHE_TTL_HOURS` default 24). Hit/miss dicatat di `app_settings`
+  (`scan_cache_stats`) untuk metrik hit rate.
+- **Kuota harian & duplikat** — counter `scan_quota:{uid}:{tanggal}` dan
+  fingerprint `sd:{uid}:{tanggal}` (daftar prefix digest) di `app_settings`,
+  fail-closed (DB tak dapat dihubungi → 503).
+- **Ledger `point_transactions`** (PRD §5.10 #1) — hook MODEL-level:
+  create divalidasi (`amount` bulat > 0, user ada) lalu `users.points`
+  disinkronkan dalam transaksi yang sama (scan→poin atomik via
+  `runInTransaction`; dipakai ulang sprint 12 untuk klaim/verifikasi).
+  UPDATE/DELETE ledger ditolak total (append-only; rekonsiliasi = baris baru).
+  Koleksi terkunci dari API publik (default deny).
+
+Route bisnis menyusul: klaim/verifikasi misi + engine gamifikasi (sprint 12),
+kuis & notif (sprint 13).
 
 ### Koleksi (port `api/app/models/*` — PRD §5)
 
@@ -71,7 +104,7 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 | `badges` | badges | publik | admin |
 | `user_badges` | user_badges | pemilik / admin | terkunci — badge engine (sprint 12) |
 | `waste_categories` | waste_categories | publik | admin |
-| `scans` | scans | pemilik | create pemilik; immutable (poin/llm via hook, sprint 11) |
+| `scans` | scans | pemilik | tulis via route scan (sprint 11); immutable bagi klien |
 | `missions` | missions | publik (aktif); admin semua | admin |
 | `user_missions` | user_missions | pemilik + staff (verifier/editor/admin) | create pemilik; update pemilik + verifier/admin |
 | `modules` | modules | publik (terbit); admin semua | admin + editor |
@@ -89,7 +122,7 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 | `audit_logs` | system.py | admin | terkunci — hook (sprint 10) |
 | `analytics_events` | system.py | admin | terkunci — konteks sistem |
 | `app_settings` | system.py | terkunci (superuser) | terkunci |
-| `llm_cache` (baru, persiapan sprint 11) | — | terkunci | terkunci |
+| `llm_cache` (cache scan — sprint 11) | — | terkunci | terkunci — hook scan |
 
 **Prinsip rules** (pengganti `core/deps.require_roles`):
 
@@ -105,8 +138,8 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 ## Verifikasi
 
 ```bash
-node pocketbase/scripts/test.mjs    # 65 asersi: skema, seed, rules, audit, rate limit, guard login
-node pocketbase/scripts/e2e-sdk.mjs # 19 asersi E2E alur klien SDK (auth, profil, misi, verifikasi)
+node pocketbase/scripts/test.mjs    # 98 asersi: skema, seed, rules, audit, rate limit, guard login, scan AI (sprint 11)
+node pocketbase/scripts/e2e-sdk.mjs # 26 asersi E2E alur klien SDK (auth, profil, misi, verifikasi, scan)
 node pocketbase/scripts/smoke.mjs   # health + ping
 ```
 

@@ -233,8 +233,58 @@ async function main() {
     const notifs = await pb.collection('notifications').getFullList()
     check('broadcast terbaca user', notifs.length === 1)
 
-    // ── 8. logout ──
-    console.log('[8] Logout')
+    // ── 8. scan AI via route kustom (jalur persis mobile — Sprint 11) ──
+    console.log('[8] Scan AI: pb.send multipart → hasil + poin + cache + riwayat')
+    const scanPost = (buffer, filename) => {
+      const form = new FormData()
+      form.append('image', new Blob([buffer], { type: 'image/png' }), filename)
+      return pb.send('/api/ekoteologi/scan', { method: 'POST', body: form, requestKey: null })
+    }
+    const PNG_1PX_SCAN = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64',
+    )
+    const scan1 = await scanPost(PNG_1PX_SCAN, 'scan.png')
+    check(
+      'scan 1 → kontrak hasil lengkap (item, kategori, saran, quote, poin)',
+      typeof scan1?.id === 'string' &&
+        typeof scan1?.item_name === 'string' &&
+        !!scan1?.category?.name &&
+        typeof scan1?.advice === 'string' &&
+        typeof scan1?.quote?.text === 'string' &&
+        scan1?.points > 0 &&
+        scan1?.points_total === scan1?.points &&
+        scan1?.cached === false &&
+        scan1?.duplicate === false,
+      JSON.stringify(scan1),
+    )
+    await pb.collection('users').authRefresh()
+    check('poin tersinkron ke users.points (ledger hook, authRefresh)', pb.authStore.record?.points === scan1.points_total, `authStore.points=${pb.authStore.record?.points}`)
+    const scan2 = await scanPost(PNG_1PX_SCAN, 'scan.png')
+    check(
+      'scan 2 (foto sama) → cache + duplikat, poin 0',
+      scan2?.cached === true && scan2?.duplicate === true && scan2?.points === 0 && scan2?.points_total === scan1.points_total,
+      JSON.stringify(scan2),
+    )
+    const history = await pb.collection('scans').getList(1, 10, {
+      filter: `user = "${uid}"`,
+      sort: '-created',
+      expand: 'category',
+    })
+    check(
+      'riwayat scan terisi dgn expand kategori',
+      history.totalItems === 2 && !!history.items[0].item_name && history.items[0].expand?.category?.name === scan1.category?.name,
+      `total=${history.totalItems}`,
+    )
+    const cats = await pb.collection('waste_categories').getFullList({ sort: 'name' })
+    check('kategori utk filter riwayat terbaca (7 seed)', cats.length === 7)
+    const quota = await pb.send('/api/ekoteologi/scan/quota', { method: 'GET' })
+    check('kuota via route: used=2 limit=20', quota?.used === 2 && quota?.limit === 20 && quota?.remaining === 18, JSON.stringify(quota))
+    const stats = await pb.send('/api/ekoteologi/scan/stats', { method: 'GET' })
+    check('stats cache: hit≥1 & mode mock', stats?.hit >= 1 && stats?.llm_mode === 'mock', JSON.stringify(stats))
+
+    // ── 9. logout ──
+    console.log('[9] Logout')
     pb.authStore.clear()
     check('authStore bersih setelah logout', !pb.authStore.isValid && pb.authStore.token === '')
   } finally {

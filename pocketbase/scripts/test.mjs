@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 /**
  * Sprint 9 — verifikasi fondasi PocketBase (pengganti pytest api).
+ * Sprint 10 — +rate limit settings, audit log, guard login, autodate.
+ * Sprint 11 — +route scan AI (mock), cache llm_cache + hit rate, kuota harian,
+ *             ledger append-only + sinkron users.points.
  *
  * Boot instance uji sekali pakai (pb_data sementara), lalu asersi via HTTP:
  *   1. /api/health + route kustom /api/ekoteologi/ping
  *   2. Migrasi skema: seluruh koleksi ter-port ada; `users` auth collection
  *   3. Seed awal: 7 kategori sampah, 10 levels, 10 badges
  *   4. API rules: default deny, ownership, role admin/verifier, anti dobel klaim
+ *   5. Rate limit settings (sprint 10)
+ *   6. Audit log (sprint 10)
+ *   7. Guard login per-identitas (sprint 10)
+ *   8. Autodate & OAuth2 (sprint 10)
+ *   9. Scan AI: auth/validasi foto, mock LLM tervalidasi, cache + hit rate,
+ *      duplikat, kuota harian 429, ledger + sinkron poin, audit (sprint 11)
  *
  * Jalankan: make pb-test   (butuh binary ./pocketbase — `make pb-install`)
  */
@@ -111,7 +120,11 @@ async function startServer() {
       "--http",
       `127.0.0.1:${port}`,
     ],
-    { stdio: ["ignore", "pipe", "pipe"] }
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+      // Kuota harian kecil agar uji 429 murah (env hanya utk instance uji).
+      env: { ...process.env, SCAN_DAILY_LIMIT: "3", LLM_MODE: "mock" },
+    }
   )
   server.stdout.on("data", (d) => process.env.PB_TEST_VERBOSE && process.stdout.write(d))
   server.stderr.on("data", (d) => process.stderr.write(d))
@@ -193,7 +206,7 @@ async function main() {
 
     // ── 4. rules: default deny, ownership, role, anti dobel ──
     console.log("[4] API rules")
-    let adminToken, aToken, bToken, aId, bId, missionId, ownScanId = ""
+    let adminToken, aToken, bToken, aId, bId, missionId = ""
     {
       // default deny: koleksi terkunci menolak anonim
       const locked = await api("POST", "/api/collections/point_transactions/records", { body: { user: "x", amount: 1, source: "scan" } })
@@ -223,19 +236,16 @@ async function main() {
       aToken = await auth("users", "a@ekoteologi.id", "RahasiaKu123")
       bToken = await auth("users", "b@ekoteologi.id", "RahasiaKu123")
 
-      // ownership scans
+      // ownership scans (tulis terkunci sejak sprint 11 — hanya route hook)
       const anonScan = await api("POST", "/api/collections/scans/records", { body: { user: aId, item_name: "botol" } })
       check("anonim tidak bisa create scans", anonScan.status >= 400)
-      const ownScan = await api("POST", "/api/collections/scans/records", { token: aToken, body: { user: aId, item_name: "botol plastik" } })
-      check("user create scans miliknya → 200", ownScan.status === 200, JSON.stringify(ownScan.data))
-      ownScanId = ownScan.data?.id
+      const ownScan = await api("POST", "/api/collections/scans/records", { token: aToken, body: { user: aId, item_name: "botol plastik", points: 99 } })
+      check("user TIDAK bisa create scans langsung (tulis via route hook — sprint 11)", ownScan.status >= 400, `status ${ownScan.status}`)
       const foreign = await api("POST", "/api/collections/scans/records", { token: aToken, body: { user: bId, item_name: "bukan milikmu" } })
       check("create scans atas nama user lain ditolak", foreign.status >= 400)
       const listA = await api("GET", "/api/collections/scans/records", { token: aToken })
       const listB = await api("GET", "/api/collections/scans/records", { token: bToken })
-      check("list scans hanya milik sendiri", listA.data?.totalItems === 1 && listB.data?.totalItems === 0)
-      const detailB = await api("GET", `/api/collections/scans/records/${ownScan.data?.id}`, { token: bToken })
-      check("view scans milik orang lain → 404", detailB.status === 404)
+      check("list scans kosong sebelum scan via route", listA.data?.totalItems === 0 && listB.data?.totalItems === 0)
 
       // anti-eskalasi via PATCH profil (guard hook)
       const escal = await api("PATCH", `/api/collections/users/records/${aId}`, { token: aToken, body: { role: "admin", points: 9999 } })
@@ -345,7 +355,9 @@ async function main() {
       check("diff create memuat full_name & bebas password", !!regCreate && regCreate.diff?.full_name?.new === "Pengguna A" && !("password" in (regCreate.diff || {})) && !("tokenKey" in (regCreate.diff || {})))
       const loginAudit = items.find((r) => r.action === "login" && r.entity_id === aId)
       check("audit login user A", !!loginAudit)
-      check("audit create scans milik A", items.some((r) => r.action === "create" && r.entity === "scans" && r.actor === aId))
+      // scans tak bisa dibuat user via API lagi (sprint 11) — cakupan audit
+      // koleksi bisnis dicek lewat klaim misi milik A (§4).
+      check("audit create klaim misi milik A", items.some((r) => r.action === "create" && r.entity === "user_missions" && r.actor === aId))
       const renameAudit = items.find((r) => r.action === "update" && r.entity === "users" && r.entity_id === aId)
       check("audit update profil memuat diff kota", !!renameAudit && renameAudit.diff?.city?.new === "Bandung")
       const hackerAudit = items.find((r) => r.action === "create" && r.entity === "users" && r.diff?.full_name?.new === "Hacker")
@@ -384,10 +396,192 @@ async function main() {
     // ── 8. autodate & oauth2 (sprint 10) ──
     console.log("[8] Autodate koleksi & status OAuth2")
     {
-      const scan = await api("GET", `/api/collections/scans/records/${ownScanId}`, { token: aToken })
-      check("record punya created/updated (autodate bootstrap)", scan.status === 200 && !!scan.data?.created && !!scan.data?.updated, JSON.stringify({ created: scan.data?.created }))
+      // scans ditulis via route hook (§9); di sini superuser membuat contoh
+      // utk asersi autodate (superuser lewati rule terkunci).
+      const seedScan = await api("POST", "/api/collections/scans/records", {
+        token: suToken,
+        body: { user: aId, item_name: "contoh autodate" },
+      })
+      check("autodate: record punya created/updated", seedScan.status === 200 && !!seedScan.data?.created && !!seedScan.data?.updated, JSON.stringify({ created: seedScan.data?.created }))
       const usersCol = await api("GET", "/api/collections/users", { token: suToken })
       check("tanpa env GOOGLE_*: oauth2 users nonaktif", usersCol.status === 200 && usersCol.data?.oauth2?.enabled === false)
+    }
+
+    // ── 9. scan AI via route kustom (sprint 11) ──
+    console.log("[9] Scan AI: foto → LLM mock → JSON tervalidasi → tersimpan + poin")
+    let photo1Points = 0
+    {
+      // PNG 1x1 valid sebagai "foto" uji (magic bytes diperiksa hook).
+      const PNG_1PX = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "base64"
+      )
+      // Varian byte berbeda → digest berbeda (PNG 1x1 warna merah).
+      const PNG_RED = Buffer.concat([
+        PNG_1PX.subarray(0, PNG_1PX.length - 1),
+        Buffer.from([PNG_1PX[PNG_1PX.length - 1] ^ 0x01]),
+      ])
+
+      const scanPost = (token, buffer, filename) => {
+        const form = new FormData()
+        form.append("image", new Blob([buffer], { type: "image/png" }), filename)
+        return fetch(`${BASE}/api/ekoteologi/scan`, {
+          method: "POST",
+          headers: token ? { Authorization: token } : {},
+          body: form,
+        }).then(async (res) => ({
+          status: res.status,
+          headers: res.headers,
+          data: await res.json().catch(() => null),
+        }))
+      }
+
+      // auth & validasi
+      const anon = await scanPost("", PNG_1PX, "foto.png")
+      check("scan tanpa token → 401", anon.status === 401, `status ${anon.status}`)
+      const noFile = await fetch(`${BASE}/api/ekoteologi/scan`, {
+        method: "POST",
+        headers: { Authorization: aToken },
+      })
+      check("scan tanpa foto → 400", noFile.status === 400, `status ${noFile.status}`)
+      const badType = await scanPost(aToken, Buffer.from("bukan gambar"), "foto.txt")
+      check("scan format bukan JPG/PNG/WebP → 400", badType.status === 400, `status ${badType.status}`)
+
+      // mock LLM → kontrak respons + tersimpan + poin
+      const first = await scanPost(aToken, PNG_1PX, "foto1.png")
+      check("scan valid → 200", first.status === 200, JSON.stringify(first.data))
+      photo1Points = first.data?.points ?? 0
+      check(
+        "kontrak respons lengkap (item_name, category, advice, quote, points, points_total, cached, duplicate)",
+        !!first.data?.id &&
+          typeof first.data?.item_name === "string" &&
+          first.data?.item_name.length >= 2 &&
+          !!first.data?.category?.id &&
+          !!first.data?.category?.name &&
+          typeof first.data?.advice === "string" &&
+          first.data?.advice.length >= 5 &&
+          typeof first.data?.quote?.text === "string" &&
+          typeof first.data?.quote?.source === "string" &&
+          typeof photo1Points === "number" &&
+          photo1Points > 0 &&
+          typeof first.data?.points_total === "number" &&
+          first.data?.cached === false &&
+          first.data?.duplicate === false,
+        JSON.stringify(first.data)
+      )
+      const pointsTotalAfterFirst = first.data?.points_total ?? 0
+      check("points_total = poin awal (ledger §4) + poin scan", pointsTotalAfterFirst === 10 + photo1Points, `${pointsTotalAfterFirst} vs ${10 + photo1Points}`)
+
+      // poin via ledger + cache users.points tersinkron
+      const aAfter = await api("GET", `/api/collections/users/records/${aId}`, { token: aToken })
+      check("users.points tersinkron dgn ledger (cache poin)", aAfter.data?.points === 10 + photo1Points, `points=${aAfter.data?.points}`)
+      const ledgerRows = await api(
+        "GET",
+        `/api/collections/point_transactions/records?filter=${encodeURIComponent(`user = "${aId}" && source = "scan"`)}`,
+        { token: aToken }
+      )
+      const scanLedger = (ledgerRows.data?.items || []).find((r) => r.amount === photo1Points)
+      check(
+        "ledger append-only terisi (source=scan, amount, ref_id=scan)",
+        ledgerRows.data?.totalItems >= 1 && !!scanLedger && scanLedger.ref_id === first.data?.id,
+        JSON.stringify(ledgerRows.data?.items || [])
+      )
+
+      // record scans lengkap dgn llm_raw/llm_meta/quote (baca superuser)
+      const scanRec = await api("GET", `/api/collections/scans/records/${first.data?.id}`, { token: suToken })
+      check(
+        "record scans memuat llm_raw + llm_meta + quote (PRD §5.3)",
+        scanRec.status === 200 && !!scanRec.data?.llm_raw && !!scanRec.data?.llm_meta && !!scanRec.data?.quote?.text,
+        JSON.stringify(scanRec.data?.llm_meta)
+      )
+      check(
+        "llm_meta memuat provider/model/latency_ms/cached=false",
+        scanRec.data?.llm_meta?.provider === "mock" &&
+          scanRec.data?.llm_meta?.model === "mock" &&
+          typeof scanRec.data?.llm_meta?.latency_ms === "number" &&
+          scanRec.data?.llm_meta?.cached === false
+      )
+      check("field file image tersimpan", typeof scanRec.data?.image === "string" && scanRec.data.image.length > 0)
+
+      // foto sama user sama → duplikat (poin 0) + cache hit
+      const dup = await scanPost(aToken, PNG_1PX, "foto1.png")
+      check("foto sama user sama → duplicate + points 0", dup.status === 200 && dup.data?.duplicate === true && dup.data?.points === 0, JSON.stringify(dup.data))
+      check("duplikat tetap dilayani dari cache", dup.data?.cached === true)
+      check("poin tidak bertambah utk duplikat", dup.data?.points_total === pointsTotalAfterFirst)
+
+      // foto sama user lain → cache hit + tetap dapat poin
+      const other = await scanPost(bToken, PNG_1PX, "foto1.png")
+      check("foto sama user lain → cache hit", other.status === 200 && other.data?.cached === true, JSON.stringify(other.data))
+      check("user lain tidak dianggap duplikat & dapat poin", other.data?.duplicate === false && other.data?.points > 0)
+      const other2 = await scanPost(bToken, PNG_1PX, "foto1.png")
+      check("user lain scan foto sama lagi → hit + duplikat", other2.status === 200 && other2.data?.cached === true && other2.data?.duplicate === true && other2.data?.points === 0, JSON.stringify(other2.data))
+
+      // cache llm_cache berisi payload lengkap (baca superuser)
+      const cacheRows = await api("GET", "/api/collections/llm_cache/records", { token: suToken })
+      check("llm_cache terisi (kunci scan:*)", cacheRows.data?.totalItems >= 1, JSON.stringify(cacheRows.data?.totalItems))
+      const cacheItem = (cacheRows.data?.items || [])[0]
+      check(
+        "entri llm_cache memuat hasil + expires",
+        !!cacheItem && String(cacheItem.key).startsWith("scan:") && !!cacheItem.value?.item_name && !!cacheItem.expires
+      )
+
+      // statistik cache: 1 miss + 3 hit = 75% (target ≥70%)
+      const stats = await api("GET", "/api/ekoteologi/scan/stats", { token: aToken })
+      check("route stats: hit=3 miss=1", stats.data?.hit === 3 && stats.data?.miss === 1, JSON.stringify(stats.data))
+      check("cache hit rate ≥70%", stats.data?.hit_rate >= 70, `hit_rate=${stats.data?.hit_rate}`)
+      check("stats melaporkan mode LLM mock", stats.data?.llm_mode === "mock")
+
+      // kuota harian (limit 3 di instance uji): A sudah 2× → scan ke-3 lolos, ke-4 → 429
+      const quota1 = await api("GET", "/api/ekoteologi/scan/quota", { token: aToken })
+      check("route kuota: used=2 limit=3", quota1.data?.used === 2 && quota1.data?.limit === 3 && quota1.data?.remaining === 1, JSON.stringify(quota1.data))
+      const third = await scanPost(aToken, PNG_RED, "foto2.png")
+      check("scan ketiga (foto lain) masih lolos", third.status === 200 && third.data?.duplicate === false, JSON.stringify(third.data))
+      const over = await scanPost(aToken, PNG_RED, "foto2.png")
+      check("scan melebihi kuota → 429", over.status === 429, `status ${over.status}`)
+      check("429 membawa Retry-After header", !!over.headers.get("retry-after"), String(over.headers.get("retry-after")))
+      check(
+        "429 pesan Indonesia + retry_after di body",
+        typeof over.data?.message === "string" && over.data.message.includes("Kuota scan harian habis") && typeof over.data?.retry_after === "number",
+        JSON.stringify(over.data)
+      )
+      const quota2 = await api("GET", "/api/ekoteologi/scan/quota", { token: aToken })
+      check("percobaan yang ditolak ikut terhitung (paritas Redis INCR)", quota2.data?.used === 4, JSON.stringify(quota2.data))
+
+      // audit + metrik aktivasi
+      const auditScan = await api(
+        "GET",
+        "/api/collections/audit_logs/records?filter=" + encodeURIComponent('action = "scan"'),
+        { token: adminToken }
+      )
+      check("aksi scan ter-audit (action=scan)", auditScan.status === 200 && auditScan.data?.totalItems >= 4, `total=${auditScan.data?.totalItems}`)
+      const events = await api(
+        "GET",
+        "/api/collections/analytics_events/records?filter=" + encodeURIComponent('name = "scan_pertama"'),
+        { token: suToken }
+      )
+      // Scan §4 A dibuat lewat API koleksi (sebelum route ada) → hanya B yang
+      // mencapai scan pertamanya via route.
+      check("event scan_pertama tercatat utk scan pertama via route (B)", events.data?.totalItems === 1 && events.data?.items?.[0]?.user === bId, JSON.stringify(events.data?.items || []))
+
+      // ledger append-only via API (hook model menolak)
+      const ledgerId = scanLedger?.id
+      const patchLedger = await api("PATCH", `/api/collections/point_transactions/records/${ledgerId}`, {
+        token: suToken,
+        body: { amount: 999 },
+      })
+      check("PATCH ledger ditolak (append-only)", patchLedger.status >= 400, `status ${patchLedger.status}`)
+      const delLedger = await api("DELETE", `/api/collections/point_transactions/records/${ledgerId}`, { token: suToken })
+      check("DELETE ledger ditolak (append-only)", delLedger.status >= 400, `status ${delLedger.status}`)
+      const zeroLedger = await api("POST", "/api/collections/point_transactions/records", {
+        token: suToken,
+        body: { user: aId, amount: 0, source: "scan" },
+      })
+      check("ledger amount=0 ditolak", zeroLedger.status >= 400, `status ${zeroLedger.status}`)
+      const negLedger = await api("POST", "/api/collections/point_transactions/records", {
+        token: suToken,
+        body: { user: aId, amount: -5, source: "scan" },
+      })
+      check("ledger amount negatif ditolak", negLedger.status >= 400, `status ${negLedger.status}`)
     }
 
     console.log(`\nHasil: ${passed} PASS, ${failed} FAIL`)

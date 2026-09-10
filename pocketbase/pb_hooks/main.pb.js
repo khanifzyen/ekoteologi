@@ -13,6 +13,8 @@
 //   4. Guard login per-identitas — 10 percobaan / 15 menit / email (sukses
 //      mereset) di koleksi app_settings; pelengkap rate limit settings
 //      per-IP dari migrasi settings bootstrap.
+// Sprint 11 (scan AI & ledger): route scan/quota/stats + hook ledger
+//   `point_transactions` hidup di scan.pb.js (lihat header file itu).
 //
 // PENTING — batasan JSVM v0.40 (plugins/jsvm binds.go, terverifikasi):
 // handler hook dikirim ke Go sebagai SUMBER fungsi (stringify) lalu
@@ -28,7 +30,7 @@
 routerAdd("GET", "/api/ekoteologi/ping", (e) => {
   return e.json(200, {
     name: $os.getenv("EKO_APP_NAME") || "ekoteologi-backend",
-    version: $os.getenv("EKO_APP_VERSION") || "0.1.0-sprint10",
+    version: $os.getenv("EKO_APP_VERSION") || "0.1.0-sprint11",
     time: new Date().toISOString(),
   })
 })

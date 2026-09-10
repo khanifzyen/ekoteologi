@@ -34,13 +34,22 @@ export class ApiError extends Error {
 /** Konversi error apa pun (umumnya ClientResponseError SDK) → ApiError. */
 export function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err
-  const e = err as { status?: number; response?: { message?: string }; message?: string; isAbort?: boolean }
+  const e = err as {
+    status?: number
+    response?: { message?: string; retry_after?: number; data?: { retry_after?: number } }
+    message?: string
+    isAbort?: boolean
+  }
   const status = typeof e?.status === 'number' ? e.status : 0
   if (status === 0) {
     return new ApiError(0, 'Tidak dapat terhubung ke server. Periksa koneksi Anda.')
   }
   const message = e?.response?.message || e?.message || 'Terjadi kesalahan pada server.'
-  return new ApiError(status, message)
+  // `retry_after` dari body error server (429 kuota scan — Sprint 11); paritas
+  // header Retry-After yang tidak terbaca langsung dari objek error SDK.
+  const retryAfterRaw = e?.response?.retry_after ?? e?.response?.data?.retry_after
+  const retryAfter = typeof retryAfterRaw === 'number' ? retryAfterRaw : null
+  return new ApiError(status, message, retryAfter)
 }
 
 /**

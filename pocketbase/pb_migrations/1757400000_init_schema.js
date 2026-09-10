@@ -318,8 +318,9 @@ migrate(
       name: "scans",
       listRule: OWN,
       viewRule: OWN,
-      createRule: OWN,
-      // immutable bagi klien — poin & llm_raw diisi hook scan (sprint 11)
+      // tulis terkunci sejak sprint 11: scan dibuat route hook
+      // POST /api/ekoteologi/scan (validasi foto + LLM + poin) — klien tidak
+      // pernah menulis baris scans sendiri (poin/item_name tak bisa dipalsu).
       fields: [
         rel("user", users),
         { type: "file", name: "image", maxSelect: 1, maxSize: 5242880, mimeTypes: ["image/jpeg", "image/png", "image/webp"] },

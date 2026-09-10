@@ -16,9 +16,9 @@ export interface ScanCategoryFull extends ScanCategory {
 }
 
 /**
- * Respons scan (kontrak UI Sprint 3). Sejak Sprint 10 foto tersimpan via API
- * koleksi `scans` (PocketBase); analisis LLM + poin menyusul di Sprint 11 —
- * hasil dengan `pending_ai = true` membawa null untuk kolom hasil AI.
+ * Respons scan (kontrak UI Sprint 3). Sejak Sprint 11 analisis LLM + poin
+ * diisi route kustom hook (`POST /api/ekoteologi/scan`) langsung saat
+ * unggah — foto → LLM → JSON tervalidasi → tersimpan + poin.
  */
 export interface ScanResult {
   id: string
@@ -28,10 +28,10 @@ export interface ScanResult {
   quote: ScanQuote | null
   points: number
   points_total: number
+  /** true: hasil dari cache `llm_cache` (bukan panggilan LLM baru). */
   cached: boolean
+  /** true: foto byte-identikal dari user sama di hari sama → poin 0. */
   duplicate: boolean
-  /** true: foto tersimpan, analisis AI + poin menyusul (Sprint 11). */
-  pending_ai: boolean
   image_url: string | null
   created_at: string
 }

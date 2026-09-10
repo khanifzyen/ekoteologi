@@ -2,8 +2,9 @@
 /**
  * Layar Scan "AR" (Sprint 3) — signature, acuan 1:1 `docs/desain/mobile/scan.html`.
  * Alur: consent foto (PRD §9) → izin kamera → preview + overlay frame (sweep)
- * → shutter (flash) → POST /v1/scan → sheet hasil (stagger) / sheet error.
- * Kuota harian ditangani dari 429 + Retry-After server (`SCAN_DAILY_LIMIT`).
+ * → shutter (flash) → POST /api/ekoteologi/scan (hook — Sprint 11) → sheet
+ * hasil "+N Poin" (stagger) / sheet error. Kuota harian dari pill (route kuota)
+ * + 429 `retry_after` server.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -175,9 +176,7 @@ async function analyze(blob: Blob, filename: string) {
     errorContent.value = null
     stage.value = 'result'
     const ms = Math.round(performance.now() - startedAt)
-    latencyText.value = data.pending_ai
-      ? 'Foto terunggah — analisis AI menyusul di pembaruan berikutnya.'
-      : `Analisis dalam ${formatLatency(ms)}${data.cached ? ' · dari cache' : ''}`
+    latencyText.value = `Analisis dalam ${formatLatency(ms)}${data.cached ? ' · dari cache' : ''}`
     recordLatency({ ms, cached: data.cached, at: new Date().toISOString() })
     auth.applyPoints(data.points_total)
     void refreshQuota()
@@ -212,10 +211,10 @@ async function onClaimed() {
   const data = result.value
   if (data && data.points > 0) {
     toast.show(`MasyaAllah! +${data.points} poin masuk.`)
-  } else if (data && data.pending_ai) {
-    toast.show('Foto tersimpan — cek riwayat scanmu.')
-  } else if (data) {
+  } else if (data && data.duplicate) {
     toast.show('Scan tercatat di riwayat — foto sama tidak diberi poin dua kali.')
+  } else if (data) {
+    toast.show('Scan tercatat di riwayat.')
   }
   await resetScan()
 }
@@ -544,15 +543,15 @@ function goHome() {
         </div>
 
         <p
-          v-if="result.pending_ai"
+          v-if="result.cached && !result.duplicate"
           class="dup-note stag"
           role="status"
         >
           <i
-            class="fas fa-robot"
+            class="fas fa-bolt"
             aria-hidden="true"
           />
-          Foto tersimpan di riwayat — analisis AI (nama objek, saran pilah, dan poin) hadir di pembaruan berikutnya.
+          Objek ini pernah dianalisis — hasil tampil instan dari cache.
         </p>
 
         <p
