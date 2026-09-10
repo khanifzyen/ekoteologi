@@ -4,7 +4,8 @@
  * Pendaftaran token sisi klien: saat aplikasi berjalan NATIVE (Android/APK),
  * izin notifikasi diminta dan token hasil `registration` disimpan sebagai
  * record `fcm_tokens` milik user (unique index token → duplikat diabaikan).
- * Pengiriman push dari server (FCM HTTP v1 via hook) menyusul Sprint 13.
+ * Pengiriman push dari server (FCM HTTP v1 via hook `pb_hooks/push.pb.js`)
+ * aktif sejak Sprint 13 — mode log bila kredensial FCM belum terpasang.
  */
 
 import { Capacitor } from '@capacitor/core'

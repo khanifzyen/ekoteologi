@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Composer push (Sprint 8 → Sprint 10) — pratinjau segmen dari koleksi
- * `users` + riwayat broadcast dari koleksi `notifications` (baris user kosong
- * = broadcast, rules membuatnya terbaca admin). Pengiriman broadcast & push
- * FCM HTTP v1 dijalankan hook PocketBase dan baru aktif di Sprint 13
- * (rencana §5) — komposer menampilkan status itu secara jujur.
+ * Composer push (Sprint 8 → Sprint 13) — pratinjau segmen & pengiriman via
+ * route hook PocketBase (`GET/POST /api/ekoteologi/admin/push/*`): satu baris
+ * broadcast `user=""` + push FCM HTTP v1 best-effort ke token segmen (mode
+ * log bila kredensial FCM belum terpasang) + audit rekap. Riwayat dari
+ * koleksi `notifications` (baris user kosong = broadcast).
  */
 import { computed, onMounted, ref } from 'vue'
 
@@ -18,6 +18,7 @@ import {
   BODY_MIN,
   TITLE_MAX,
   TITLE_MIN,
+  broadcastSummary,
   composerError,
   historyLabel,
   type BroadcastResult,
@@ -64,29 +65,16 @@ function segmentLabel(key: string): string {
 
 const fmt = new Intl.NumberFormat('id-ID')
 
-async function countUsers(filter: string): Promise<number> {
-  const page = await pb.collection('users').getList(1, 1, { filter, fields: 'id' })
-  return page.totalItems
-}
-
 async function load() {
   error.value = ''
   loading.value = true
   try {
-    const since = new Date()
-    since.setDate(since.getDate() - 7)
-    const iso = since.toISOString().replace('T', ' ')
-    const [all, aktif, pasif] = await Promise.all([
-      countUsers('is_active != false'),
-      countUsers(`last_active_date >= "${iso}"`),
-      countUsers(`is_active != false && (last_active_date = "" || last_active_date < "${iso}")`),
-    ])
-    segments.value = [
-      { segment: 'all', label: SEGMENT_FALLBACK.all, recipients: all, tokens: 0 },
-      { segment: 'aktif_7hari', label: SEGMENT_FALLBACK.aktif_7hari, recipients: aktif, tokens: 0 },
-      { segment: 'pasif_7hari', label: SEGMENT_FALLBACK.pasif_7hari, recipients: pasif, tokens: 0 },
-      { segment: 'bertoken', label: SEGMENT_FALLBACK.bertoken, recipients: 0, tokens: 0 },
-    ]
+    // Pratinjau segmen dari route hook (penerima + token per segmen).
+    const preview = await pb.send<{ items: SegmentStat[] }>('/api/ekoteologi/admin/push/segments', {
+      method: 'GET',
+      requestKey: null,
+    })
+    segments.value = preview.items ?? []
     const rows = await pb.collection('notifications').getFullList<Record<string, unknown>>({
       filter: 'user = ""',
       sort: '-created',
@@ -114,13 +102,29 @@ function validate(): string {
 async function send() {
   formError.value = validate()
   if (formError.value) return
-  // Pengiriman broadcast = hook notifikasi (Sprint 13). Tidak memanggil API
-  // apa pun agar tidak mengklaim keberhasilan palsu.
+  // Kirim via route hook: notifikasi in-app + push FCM best-effort + audit.
   sending.value = true
+  formError.value = ''
   try {
-    toast.show(
-      'Pengiriman push aktif di Sprint 13 (hook notifikasi & FCM). Pratinjau segmen tetap tersedia.',
-    )
+    const res = await pb.send<BroadcastResult & { id: string }>('/api/ekoteologi/admin/push/broadcast', {
+      method: 'POST',
+      body: { title: form.value.title.trim(), body: form.value.body.trim(), segment: form.value.segment },
+      requestKey: null,
+    })
+    result.value = {
+      id: res.id,
+      title: res.title,
+      body: res.body,
+      segment: res.segment,
+      recipients: res.recipients ?? 0,
+      tokens: res.tokens ?? 0,
+      sent: res.sent ?? 0,
+    }
+    toast.show(broadcastSummary(result.value))
+    form.value = { title: '', body: '', segment: form.value.segment }
+    await load()
+  } catch (err) {
+    formError.value = toApiError(err).message
   } finally {
     sending.value = false
   }
@@ -336,8 +340,8 @@ onMounted(() => {
           aria-hidden="true"
         />
         <div>
-          <strong>Pengiriman broadcast aktif di Sprint 13</strong>
-          <span>Notifikasi realtime & FCM HTTP v1 dikirim lewat hook PocketBase — pratinjau segmen di atas tetap dipakai saat itu.</span>
+          <strong>{{ broadcastSummary(result) }}</strong>
+          <span>Notifikasi in-app terkirim; push FCM dikirim best-effort ke perangkat terdaftar (mode log bila kredensial belum terpasang).</span>
         </div>
       </div>
     </div>

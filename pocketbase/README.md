@@ -47,6 +47,24 @@ auth-with-password`, file: `/api/files/{koleksi}/{id}/{filename}`, realtime SSE:
 | `GET /api/ekoteologi/streak` | user | `{current_streak, longest_streak, active_today, last_active_date, bonus_points, bonus_every_days, days_to_bonus, week:[{date,active}]}` — streak efektif + kalender 7 hari dari ledger |
 | `POST /api/ekoteologi/cron/streak-reminder` | admin | Trigger manual pass reminder streak (idempoten per hari) → `{sent}`; versi terjadwal hidup di `cronAdd` (env `STREAK_REMINDER_CRON`) |
 
+Route sprint 13 (e-learning, notifikasi & ops):
+
+| Route | Auth | Keterangan |
+|---|---|---|
+| `GET /api/ekoteologi/modules` | user | Daftar modul tayang + progres saya + ringkasan `{completed,total}` + CTA kartu (Mulai/Lanjutkan/Ulangi diturunkan server) |
+| `GET /api/ekoteologi/modules/{id}` | user | Detail modul: pelajaran urut + intro kuis **tanpa kunci jawaban** + hasil kuis terbaik saya |
+| `GET /api/ekoteologi/lessons/{id}` | user | Satu pelajaran (blok JSON paragraph/quote/tip) + `next_lesson_id` |
+| `POST /api/ekoteologi/lessons/{id}/complete` | user | Progres berurutan (`lessons_done = max(tercatat, order+1)`); pelajaran terakhir → event `modul_selesai` + streak + badge (transisi sekali) |
+| `GET /api/ekoteologi/modules/{id}/quiz` | user | Intro kuis: soal tanpa kunci; `QUIZ_PASS_PERCENT` (70) & `QUIZ_POINTS` (20) via env |
+| `POST /api/ekoteologi/modules/{id}/quiz` | user | **Penilaian server-side** — lulus → attempt + poin SEKALI per modul via ledger (anti dobel; `already_passed_before` pada lulus ulang) + notifikasi + event + streak + badge, satu transaksi; gagal → attempt tersimpan tanpa poin; respons memuat review (kunci + penjelasan) |
+| `GET /api/ekoteologi/daily-content` | user | Konten hari ini (terjadwal admin) atau fallback rotasi bank quote terkurasi — selalu 200 dgn flag `fallback` |
+| `POST /api/ekoteologi/cron/daily-content` | admin | Trigger auto-publish konten harian dari bank (idempoten; cron `DAILY_CONTENT_CRON`, matikan via `DAILY_CONTENT_AUTOPUBLISH=0`) |
+| `GET /api/ekoteologi/admin/push/segments` | admin | Rekap penerima + token per segmen (preview komposer) |
+| `POST /api/ekoteologi/admin/push/broadcast` | admin | Composer push semua/segmen — validasi judul 4–64 & isi 8–300; SATU baris broadcast `user=""` + push best-effort + rekap `{recipients,tokens,sent}` + audit |
+| `GET /api/ekoteologi/admin/dashboard` | staff | Agregasi KPI + chart (pengguna, scan, antrian verifikasi, cache hit rate, token/biaya LLM bulan berjalan, scan harian 14 hari, kategori 7 hari) |
+| `POST /api/ekoteologi/cron/cleanup` | admin | Pembersihan kunci `app_settings` kedaluwarsa (`sr:*`, `scan_quota:*`, `sd:*`, guard login lewat jendela, cache token FCM) + `llm_cache` kadaluarsa → `{settings_removed, cache_removed}`; cron `CLEANUP_CRON` (default 03.30) |
+| `POST /api/ekoteologi/cron/backup` | admin | Cadangan `pb_data` on demand (`$app.createBackup`) — jadwal otomatis memakai fitur bawaan PB (env `BACKUP_ENABLED`/`BACKUP_CRON`/`BACKUP_KEEP`), arsip di `/api/backups` |
+
 Hook sprint 10 (auth, profil & audit — pengganti middleware FastAPI):
 
 - **Audit log** — setiap create/update/delete koleksi bisnis + login sukses
@@ -116,11 +134,52 @@ Hook sprint 12 (misi, verifikasi & gamifikasi — `pb_hooks/gamification.pb.js`)
 - **Cron reminder streak** — `cronAdd` (env `STREAK_REMINDER_CRON`, default
   `0 8 * * *`) menulis notifikasi in-app utk user aktif kemarin yang belum
   aktif hari ini (idempoten per hari via guard `app_settings`); pengiriman
-  push FCM menyusul Sprint 13. Trigger manual: route admin.
+  Push FCM + realtime mengalir otomatis via pipeline notifikasi (sprint 13,
+  push.pb.js). Trigger manual: route admin.
 - **Proteksi hapus misi** — DELETE `missions` dengan klaim → 409
   (nonaktifkan saja — jaga riwayat; paritas admin_missions.py FastAPI).
 
-Route bisnis menyusul: kuis & notif realtime/push (sprint 13).
+Hook sprint 13 (e-learning, notifikasi & ops):
+
+- **Kuis & progres terkunci server-side** — koleksi `quiz_questions`/
+  `quizzes` tertutup dari baca publik (kunci jawaban hanya keluar lewat route,
+  sesudah submit); `user_quiz_attempts` & `user_module_progress` tanpa rule
+  tulis (attempt `passed=true` palsu tidak bisa memanen lencana; progres tidak
+  bisa dipalsukan — paritas scans sprint 11 & user_missions sprint 12).
+- **Pipeline notifikasi → push (realtime + FCM)** — setiap baris
+  `notifications` yang lahir (verifikasi misi, bonus streak, reminder cron,
+  lencana, poin kuis, misi baru, broadcast) otomatis di-push via hook
+  `onRecordAfterCreateSuccess`: user terisi → token miliknya; user kosong →
+  token sesuai segmen `payload.segment` (all / aktif_7hari / pasif_7hari /
+  bertoken). Rekap `{recipients,tokens,sent,mode}` ditulis kembali ke
+  `payload.push`; token yang ditolak FCM (404/410) dihapus. Realtime in-app
+  memakai SSE bawaan PB (`/api/realtime`, SDK subscribe — teruji E2E).
+- **FCM HTTP v1 di JSVM** — `PUSH_MODE=fcm`: JWT **RS256** service account
+  dibuat murni di JSVM (SHA-256 + RSA PKCS#1 v1.5 via BigInt goja —
+  `$security` hanya punya HS256/HS512), ditukar access token (cache
+  `$app.store()` + `app_settings`), lalu POST `messages:send`. Tanpa
+  kredensial layak → fallback log (fail-safe, teruji). Env:
+  `FCM_CREDENTIALS_FILE`/`FCM_CREDENTIALS_JSON`, `FCM_PROJECT_ID`,
+  `FCM_OAUTH_URL`/`FCM_SEND_URL` (override uji).
+- **Event "misi baru"** — misi aktif yang diterbitkan admin memicu broadcast
+  `Misi baru!` (paritas `announce_new_mission` FastAPI).
+- **Guard `notifications`** — pemilik hanya boleh mengubah `read_at` (judul/
+  isi tidak bisa dideface); superuser bebas.
+- **Review klaim full atomik** — PATCH `user_missions` (staff) menjalankan
+  save + ledger + notifikasi + event + streak + badge + audit dalam SATU
+  transaksi; gagal di tengah = tidak ada yang berubah (klaim tetap
+  `submitted`, poin tidak bergerak — menutup temuan sprint 12 §4 #5).
+  Pemilik/misi klaim dipaksa dari nilai asli (anti pembajakan klaim).
+- **Dashboard agregasi** — `GET /api/ekoteologi/admin/dashboard`: SQL
+  `$app.db().newQuery().all()` terbukti gagal di JSVM v0.40 ("Invalid
+  variable type: must be a pointer" — diverifikasi ulang), agregasi memakai
+  `findRecordsByFilter` + hitung di JS (skala MVP; diamati ke depan).
+- **Error hook** — middleware `routerUse` menangkap error tak terduga route
+  (tanpa status / ≥500; bisnis 4xx tidak) → Sentry (`SENTRY_DSN`, store
+  endpoint) + PB logs; cron memakai reporter yang sama.
+- **Backup & cleanup** — backup otomatis = fitur bawaan PB (migrasi sprint 13
+  mengisi `settings.backups.cron` dari env) + route manual; cleanup cron
+  membuang kunci `app_settings` kedaluwarsa & `llm_cache` kadaluarsa.
 
 ### Koleksi (port `api/app/models/*` — PRD §5)
 
@@ -146,15 +205,16 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 | `modules` | modules | publik (terbit); admin semua | admin + editor |
 | `lessons` | lessons | modul terbit | admin + editor |
 | `quizzes`, `quiz_questions` | quizzes, quiz_questions | modul terbit | admin + editor |
-| `user_module_progress` | user_module_progress | pemilik | pemilik |
-| `user_quiz_attempts` | user_quiz_attempts | pemilik | create pemilik (append-only) |
+| `user_module_progress` | user_module_progress | pemilik | terkunci — route `lessons/{id}/complete` (sprint 13) |
+| `user_quiz_attempts` | user_quiz_attempts | pemilik | terkunci — hook penilaian kuis (sprint 13); append-only |
+| `quizzes`, `quiz_questions` | quizzes, quiz_questions | admin + editor saja (kunci jawaban tidak pernah publik — sprint 13) | admin + editor |
 | `daily_contents` | daily_contents | publik (publish_date lewat / hari ini) | admin + editor |
 | `posts`, `post_likes`, `post_comments` [fase 2] | community.py | publik (non-hidden, tak terhapus); like publik | pemilik; soft delete |
 | `reports` | community.py | admin | create user (reporter = diri) |
 | `map_locations` | community.py | publik | admin |
 | `rewards` [fase 2] | reward.py | publik (aktif) | admin |
 | `redemptions` [fase 2] | reward.py | pemilik / admin | create pemilik; update admin |
-| `notifications` | system.py | pemilik + broadcast (user kosong) | terkunci — hook (sprint 13); update read_at pemilik |
+| `notifications` | system.py | pemilik + broadcast (user kosong) | terkunci — hook event (sprint 13); update `read_at` saja oleh pemilik (guard) |
 | `audit_logs` | system.py | admin | terkunci — hook (sprint 10) |
 | `analytics_events` | system.py | admin | terkunci — konteks sistem |
 | `app_settings` | system.py | terkunci (superuser) | terkunci |
@@ -174,8 +234,8 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 ## Verifikasi
 
 ```bash
-node pocketbase/scripts/test.mjs    # 171 asersi: skema, seed, rules, audit, rate limit, guard login, scan AI, misi+verifikasi+gamifikasi (sprint 12)
-node pocketbase/scripts/e2e-sdk.mjs # 35 asersi E2E alur klien SDK (auth, profil, misi via route, verifikasi, streak, badge, scan)
+node pocketbase/scripts/test.mjs    # 254 asersi: skema, seed, rules, audit, rate limit, guard login, scan AI, misi+gamifikasi, e-learning (kuis server-side + anti dobel), konten harian + cron, broadcast + FCM (endpoint mock: OAuth JWT RS256 diverifikasi), dashboard, cleanup, backup, guard read_at, rollback review (instance fault-injection) + Sentry + fallback log (sprint 13)
+node pocketbase/scripts/e2e-sdk.mjs # 51 asersi E2E alur klien SDK (auth, profil, misi via route, verifikasi, streak, badge, scan, e-learning, realtime SSE, broadcast, daily-content, dashboard)
 node pocketbase/scripts/smoke.mjs   # health + ping
 ```
 
@@ -191,6 +251,30 @@ Migrasi `1757500000_settings_bootstrap.js` (jalan otomatis saat serve):
    (temuan v0.40: koleksi bawaan tidak lagi menyertakannya).
 3. **OAuth2 Google** pada koleksi `users` — aktif hanya bila env
    `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET` terisi (lihat `.env.example`).
+
+## Security header reverse proxy (produksi)
+
+PocketBase mengirim header dasar; lengkapi di reverse proxy (contoh Caddy —
+Nginx setara dengan `add_header`):
+
+```caddyfile
+ekoteologi.example.id {
+  reverse_proxy 127.0.0.1:8090
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options    "nosniff"
+    X-Frame-Options           "DENY"
+    Referrer-Policy           "strict-origin-when-cross-origin"
+    Permissions-Policy        "camera=(self), geolocation=()"
+    Content-Security-Policy   "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
+    -Server
+  }
+}
+```
+
+Catatan: `connect-src 'self'` mencakup SSE `/api/realtime`; CSP longgar untuk
+`style-src 'unsafe-inline'` karena Vue SFC admin/mobile menyuntik style saat
+boot. Uji tiap header setelah deploy (mis. securityheaders.com).
 
 ## Catatan upgrade
 

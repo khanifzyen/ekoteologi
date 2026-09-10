@@ -1,14 +1,17 @@
 <script setup lang="ts">
 /**
- * Dashboard admin (Sprint 3–4 → Sprint 10) — 4 KPI + 2 chart gaya editorial.
- * Sumber kini koleksi PocketBase bawaan: pengguna & antrian verifikasi
- * dihitung dari `users`/`user_missions` (rules memuat staff). Agregasi lintas
- * pengguna untuk scan/LLM/cache membutuhkan route kustom `$app.db` dan baru
- * dibangun Sprint 13 (rencana §5) — kartu terkait tampil jujur "menunggu".
+ * Dashboard admin (Sprint 3–4 → Sprint 13) — 4 KPI + 2 chart gaya editorial.
+ * Sumber kini route agregasi hook PocketBase
+ * `GET /api/ekoteologi/admin/dashboard` (sprint 13 — SQL `$app.db` tidak
+ * tersedia di JSVM, agregasi dihitung server-side di hook; lihat
+ * pocketbase/pb_hooks/ops.pb.js): pengguna, scan, antrian verifikasi,
+ * cache hit rate, token/biaya LLM bulan berjalan, chart scan harian dan
+ * komposisi kategori.
  */
 import { computed, onMounted, ref } from 'vue'
 
 import { pb, toApiError } from '@/api/client'
+import ChartBar from '@/components/ChartBar.vue'
 import ChartLine from '@/components/ChartLine.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -16,10 +19,19 @@ import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 
 const loading = ref(true)
 const error = ref('')
-/** KPI terhitung dari koleksi (null saat masih memuat / error). */
-const usersTotal = ref(0)
-const usersNew7d = ref(0)
-const pendingVerifications = ref(0)
+
+interface DashboardPayload {
+  users: { total: number; new_7d: number }
+  scans: { today: number; total: number }
+  verification: { pending: number }
+  cache: { hit: number; miss: number; hit_rate: number | null }
+  llm: { tokens_month: number; cost_month: number; budget_monthly: number | null }
+  charts: {
+    daily: Array<{ date: string; count: number }>
+    categories: Array<{ name: string; icon: string; count: number; percentage: number }>
+  }
+}
+const data = ref<DashboardPayload | null>(null)
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('id-ID').format(value)
@@ -34,37 +46,37 @@ const today = computed(() =>
   }).format(new Date()),
 )
 
-/** 14 label hari terakhir (chart scan harian — nilai diisi setelah Sprint 13). */
-const CHART_DAYS = 14
-const dailyLabels = computed(() =>
-  Array.from({ length: CHART_DAYS }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (CHART_DAYS - 1 - i))
-    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-  }),
-)
-const dailyValues = computed(() => Array.from({ length: CHART_DAYS }, () => 0))
+const usersTotal = computed(() => data.value?.users.total ?? 0)
+const usersNew7d = computed(() => data.value?.users.new_7d ?? 0)
+const scansToday = computed(() => data.value?.scans.today ?? 0)
+const scansTotal = computed(() => data.value?.scans.total ?? 0)
+const pendingVerifications = computed(() => data.value?.verification.pending ?? 0)
+const cacheRate = computed(() => data.value?.cache.hit_rate ?? null)
+const llmCost = computed(() => data.value?.llm.cost_month ?? 0)
+const llmTokens = computed(() => data.value?.llm.tokens_month ?? 0)
 
-async function countFiltered(collection: string, filter: string): Promise<number> {
-  const page = await pb.collection(collection).getList(1, 1, { filter, fields: 'id' })
-  return page.totalItems
-}
+/** Chart garis: scan harian dari server (sudah berbentuk {date, count}). */
+const CHART_DAYS = 14
+const dailyLabels = computed(() => {
+  const items = data.value?.charts.daily ?? []
+  return items.map((d) =>
+    new Date(`${d.date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+  )
+})
+const dailyValues = computed(() => (data.value?.charts.daily ?? []).map((d) => d.count))
+
+/** Chart batang: komposisi kategori 7 hari (label + persentase). */
+const catLabels = computed(() => (data.value?.charts.categories ?? []).map((c) => c.name))
+const catValues = computed(() => (data.value?.charts.categories ?? []).map((c) => c.percentage))
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const since = new Date()
-    since.setDate(since.getDate() - 7)
-    const iso = since.toISOString().replace('T', ' ')
-    const [total, new7d, pending] = await Promise.all([
-      countFiltered('users', ''),
-      countFiltered('users', `created >= "${iso}"`),
-      countFiltered('user_missions', 'status = "submitted"'),
-    ])
-    usersTotal.value = total
-    usersNew7d.value = new7d
-    pendingVerifications.value = pending
+    data.value = await pb.send<DashboardPayload>('/api/ekoteologi/admin/dashboard', {
+      method: 'GET',
+      requestKey: null,
+    })
   } catch (err) {
     error.value = toApiError(err).message
   } finally {
@@ -81,7 +93,7 @@ onMounted(() => {
   <div class="page-head">
     <div>
       <h1>Dashboard</h1>
-      <p>{{ today }} · ringkasan koleksi PocketBase</p>
+      <p>{{ today }} · ringkasan PocketBase via route agregasi</p>
     </div>
     <BaseButton
       variant="outline"
@@ -153,10 +165,10 @@ onMounted(() => {
       />
       <KpiCard
         icon="fa-camera"
-        label="Total Scan"
-        value="—"
-        delta="menunggu route agregasi (Sprint 13)"
-        tone="neutral"
+        label="Scan Sampah"
+        :value="formatNumber(scansTotal)"
+        :delta="`+${formatNumber(scansToday)} hari ini`"
+        tone="up"
       />
       <KpiCard
         icon="fa-clipboard-check"
@@ -168,8 +180,12 @@ onMounted(() => {
       <KpiCard
         icon="fa-coins"
         :label="`Biaya LLM (${new Date().toLocaleDateString('id-ID', { month: 'short' })})`"
-        value="Rp0"
-        delta="mode LLM mock — live menyusul Sprint 11"
+        :value="`Rp${formatNumber(llmCost)}`"
+        :delta="
+          cacheRate === null
+            ? `${formatNumber(llmTokens)} token · cache belum terpakai`
+            : `${formatNumber(llmTokens)} token · cache hit ${cacheRate}%`
+        "
         tone="neutral"
       />
     </div>
@@ -181,16 +197,16 @@ onMounted(() => {
             Scan AI · {{ CHART_DAYS }} hari terakhir
           </div>
           <div class="chart-title">
-            Route agregasi dashboard menyusul (Sprint 13)
+            Jumlah pemindaian sampah per hari
           </div>
           <div class="chart-sub">
-            Jumlah pemindaian sampah per hari (semua pengguna)
+            Semua pengguna · sumber route agregasi hook
           </div>
           <ChartLine
             :labels="dailyLabels"
             :values="dailyValues"
-            :description="`Grafik garis: jumlah scan harian selama ${CHART_DAYS} hari (belum terisi)`"
-            foot="Koleksi `scans` hanya terbaca pemiliknya — agregasi lintas pengguna butuh route kustom (Sprint 13)"
+            :description="`Grafik garis: jumlah scan harian selama ${CHART_DAYS} hari`"
+            foot="Agregasi dihitung server-side (hook PocketBase) — scans tetap privat per pemilik"
           />
         </div>
       </div>
@@ -201,14 +217,25 @@ onMounted(() => {
             Komposisi Kategori · 7 Hari
           </div>
           <div class="chart-title">
-            Menunggu route agregasi dashboard (Sprint 13)
+            Kategori hasil scan minggu ini
           </div>
           <div class="chart-sub">
-            Persentase kategori dari scan minggu ini
+            Persentase dari total scan 7 hari terakhir
           </div>
-          <p class="chart-empty">
-            Kategori hasil scan terisi setelah modul scan AI (Sprint 11) dan route
-            agregasi dashboard (Sprint 13) aktif.
+          <template v-if="catLabels.length > 0">
+            <ChartBar
+              :labels="catLabels"
+              :values="catValues"
+              description="Grafik batang: komposisi kategori sampah 7 hari terakhir"
+              foot="Kategori dicocokkan dari bank `waste_categories`"
+            />
+          </template>
+          <p
+            v-else
+            class="chart-empty"
+          >
+            Belum ada scan dalam 7 hari terakhir — kartu ini terisi otomatis setelah
+            scan pertama.
           </p>
         </div>
       </div>

@@ -7,7 +7,8 @@
 //   2. GET  /api/ekoteologi/scan/quota — kuota harian user (paritas
 //      GET /v1/scans/quota FastAPI).
 //   3. GET  /api/ekoteologi/scan/stats — statistik cache hit/miss (target
-//      hit rate ≥70% — PRD §5.10 #6; agregasi dashboard menyusul Sprint 13).
+//      hit rate ≥70% — PRD §5.10 #6; ditampilkan di dashboard admin via
+//      route agregasi sprint 13 (ops.pb.js).
 //   4. Hook ledger `point_transactions` — append-only + sinkron `users.points`
 //      (PRD §5.10 #1). Hook MODEL-level: dipicu JUGA oleh tulisan internal
 //      hook (runInTransaction) sehingga scan→poin atomik, dan dipakai ulang

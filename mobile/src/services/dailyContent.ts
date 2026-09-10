@@ -1,13 +1,14 @@
-/** Service konten harian (Sprint 6 → Sprint 10: koleksi `daily_contents`). */
+/** Service konten harian (Sprint 6 → Sprint 13: route hook PocketBase). */
 
 import { pb, toApiError } from '@/api/client'
 import type { DailyContent } from '@/types/daily'
 
 /**
- * Bank quote fallback (paritas server lama) — tampil bila tidak ada konten
- * terjadwal untuk hari ini (admin mengelola jadwal via panel Konten Harian).
+ * Bank quote lokal — HANYA utk luring (server route `GET /api/ekoteologi/
+ * daily-content` selalu 200: konten terjadwal admin, auto-publish cron, atau
+ * fallback bank terkurasi server — satu sumber dgn scan).
  */
-const FALLBACK_BANK: Array<Pick<DailyContent, 'type' | 'body' | 'source'>> = [
+const OFFLINE_BANK: Array<Pick<DailyContent, 'type' | 'body' | 'source'>> = [
   {
     type: 'hadis',
     body: 'Dunia itu hijau dan manis, dan Allah menjadikan kalian khalifah di atasnya — maka lihatlah bagaimana kalian berbuat.',
@@ -25,38 +26,34 @@ const FALLBACK_BANK: Array<Pick<DailyContent, 'type' | 'body' | 'source'>> = [
   },
 ]
 
-/** Konten hari ini: terjadwal (admin) atau fallback bank quote terkurasi. */
+/** Konten hari ini: server (terjadwal/auto-publish/fallback) atau bank luring. */
 export async function fetchDailyContent(): Promise<DailyContent> {
-  let pick: Pick<DailyContent, 'type' | 'body' | 'source'>
   try {
-    const page = await pb.collection('daily_contents').getList<Record<string, unknown>>(1, 1, {
-      sort: '-publish_date',
+    const data = await pb.send<DailyContent>('/api/ekoteologi/daily-content', {
+      method: 'GET',
+      requestKey: null,
     })
-    const row = page.items[0]
-    if (row) {
-      return {
-        date: String(row.publish_date ?? new Date().toISOString().slice(0, 10)),
-        type: String(row.type ?? 'refleksi'),
-        title: (row.title as string) || null,
-        body: String(row.body ?? ''),
-        source: (row.source as string) || null,
-        eco_action: (row.eco_action as string) || null,
-        fallback: false,
-      }
+    return {
+      date: data.date,
+      type: data.type,
+      title: data.title ?? null,
+      body: data.body,
+      source: data.source ?? null,
+      eco_action: data.eco_action ?? null,
+      fallback: !!data.fallback,
     }
-    pick = FALLBACK_BANK[new Date().getDate() % FALLBACK_BANK.length]
   } catch (err) {
-    // Luring/gangguan server → lempar agar UI menampilkan state error;
-    // server hidup tanpa konten terjadwal → pakai fallback bank.
+    // Luring/gangguan jaringan → bank lokal (UI tetap menampilkan kartu);
+    // error aplikasi lain diteruskan agar state error tampil.
     const e = toApiError(err)
-    if (e.status === 0) throw e
-    pick = FALLBACK_BANK[new Date().getDate() % FALLBACK_BANK.length]
-  }
-  return {
-    ...pick,
-    date: new Date().toISOString().slice(0, 10),
-    title: null,
-    eco_action: null,
-    fallback: true,
+    if (e.status !== 0) throw e
+    const pick = OFFLINE_BANK[new Date().getDate() % OFFLINE_BANK.length]
+    return {
+      ...pick,
+      date: new Date().toISOString().slice(0, 10),
+      title: null,
+      eco_action: null,
+      fallback: true,
+    }
   }
 }

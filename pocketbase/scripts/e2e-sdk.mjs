@@ -4,6 +4,8 @@
  * Sprint 12 — misi: klaim manual/photo via route hook (auto-approve, anti
  * dobel, consent), verifikasi admin → poin ledger + notifikasi, badge lazy,
  * streak (status + kalender), level engine di users.
+ * Sprint 13 — e-learning via route (kuis server-side + anti dobel poin),
+ * realtime SSE notifikasi, broadcast composer, konten harian, dashboard.
  *
  * Mensimulasikan persis jalur yang dipakai admin & mobile setelah swap SDK:
  *   1. Registrasi publik → authWithPassword → authStore valid (token persist).
@@ -14,6 +16,8 @@
  *   6. Verifikasi admin: klaim photo → antrian → approve → ledger+notif+badge.
  *   7. Audit log terisi (admin baca), notifikasi broadcast terbaca user.
  *   8. Logout → authStore bersih.
+ *   9. E-learning via route hook (sprint 13).
+ *  10. Realtime SSE + broadcast + daily-content + dashboard (sprint 13).
  *
  * Jalankan: node pocketbase/scripts/e2e-sdk.mjs   (butuh binary — make pb-install)
  * SDK diimpor dari admin/node_modules (dependensi workspace sudah ada).
@@ -41,6 +45,75 @@ function loadPocketBase() {
   return require('pocketbase').default
 }
 const PocketBase = loadPocketBase()
+
+// Node tidak menyertakan EventSource global (browser/mobile WebView iya) —
+// polyfill SSE minimal berbasis fetch agar uji realtime SDK bisa jalan di CI.
+// Mendukung kontrak yang dipakai SDK pocketbase: onopen/onmessage/onerror,
+// addEventListener utk event bernama (PB_CONNECT dgn lastEventId), dan close().
+if (typeof globalThis.EventSource === 'undefined') {
+  globalThis.EventSource = class {
+    constructor(url) {
+      this.url = url
+      this.readyState = 0
+      this.lastEventId = ''
+      this.onopen = null
+      this.onmessage = null
+      this.onerror = null
+      this._listeners = {}
+      this._ctrl = new AbortController()
+      this._closed = false
+      fetch(url, { signal: this._ctrl.signal, headers: { Accept: 'text/event-stream' } })
+        .then(async (res) => {
+          if (!res.ok || !res.body) throw new Error('SSE HTTP ' + res.status)
+          this.readyState = 1
+          if (this.onopen) this.onopen()
+          const reader = res.body.getReader()
+          const dec = new TextDecoder()
+          let buf = ''
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += dec.decode(value, { stream: true })
+            let idx
+            while ((idx = buf.indexOf('\n\n')) !== -1) {
+              const chunk = buf.slice(0, idx)
+              buf = buf.slice(idx + 2)
+              let data = ''
+              let name = ''
+              let id = ''
+              for (const line of chunk.split('\n')) {
+                if (line.startsWith('data:')) data += (data ? '\n' : '') + line.slice(5).trimStart()
+                else if (line.startsWith('event:')) name = line.slice(6).trim()
+                else if (line.startsWith('id:')) id = line.slice(3).trim()
+              }
+              if (!data && !name) continue
+              if (id) this.lastEventId = id
+              const payload = { data, lastEventId: this.lastEventId }
+              if (name) {
+                for (const cb of this._listeners[name] || []) cb(payload)
+              } else if (this.onmessage) {
+                this.onmessage(payload)
+              }
+            }
+          }
+        })
+        .catch((err) => {
+          if (!this._closed && this.onerror) this.onerror(err)
+        })
+    }
+    addEventListener(type, cb) {
+      ;(this._listeners[type] = this._listeners[type] || []).push(cb)
+    }
+    removeEventListener(type, cb) {
+      this._listeners[type] = (this._listeners[type] || []).filter((f) => f !== cb)
+    }
+    close() {
+      this._closed = true
+      this.readyState = 2
+      this._ctrl.abort()
+    }
+  }
+}
 
 const DIR = HERE
 const PB_DIR = path.resolve(DIR, '..')
@@ -328,8 +401,160 @@ async function main() {
     const stats = await pb.send('/api/ekoteologi/scan/stats', { method: 'GET' })
     check('stats cache: hit≥1 & mode mock', stats?.hit >= 1 && stats?.llm_mode === 'mock', JSON.stringify(stats))
 
-    // ── 9. logout ──
-    console.log('[9] Logout')
+    // ── 9. e-learning via route hook (jalur persis layar Belajar — Sprint 13) ──
+    console.log('[9] E-learning: modul → pelajaran → kuis server-side (anti dobel poin)')
+    const mod = await su.collection('modules').create({
+      title: 'Modul E2E Sprint 13',
+      slug: 'modul-e2e-13',
+      description: 'Modul uji E2E',
+      order: 1,
+      is_published: true,
+    })
+    const les1 = await su.collection('lessons').create({
+      module: mod.id,
+      title: 'Pelajaran Satu',
+      order: 0,
+      content: [{ type: 'paragraph', text: 'Materi pertama.' }, { type: 'tip', text: 'Tips singkat.' }],
+    })
+    const les2 = await su.collection('lessons').create({
+      module: mod.id,
+      title: 'Pelajaran Dua',
+      order: 1,
+      content: [{ type: 'paragraph', text: 'Materi kedua.' }],
+    })
+    const quiz = await su.collection('quizzes').create({ module: mod.id })
+    const qIds = []
+    const qAnswers = [2, 0, 1, 3]
+    for (let i = 0; i < 4; i++) {
+      const q = await su.collection('quiz_questions').create({
+        quiz: quiz.id,
+        question: `Soal ${i + 1}?`,
+        options: ['A', 'B', 'C', 'D'],
+        answer: qAnswers[i],
+        explanation: `Penjelasan ${i + 1}.`,
+        order: i + 1,
+      })
+      qIds.push(q.id)
+    }
+    const listModules = await pb.send('/api/ekoteologi/modules', { method: 'GET', requestKey: null })
+    const card = (listModules?.items || []).find((m) => m.id === mod.id)
+    check(
+      'daftar modul via route: kartu + progres + CTA',
+      Array.isArray(listModules?.items) && !!card && card.lesson_count === 2 && card.quiz_question_count === 4 && card.cta === 'Mulai',
+      JSON.stringify(card),
+    )
+    const detailModule = await pb.send(`/api/ekoteologi/modules/${mod.id}`, { method: 'GET', requestKey: null })
+    check(
+      'detail modul: soal TANPA kunci jawaban (kunci hanya di server)',
+      detailModule?.quiz?.questions?.length === 4 && detailModule?.quiz?.questions?.every((q) => !('answer' in q)),
+      JSON.stringify(detailModule?.quiz),
+    )
+    const lockedSoal = await pb.collection('quiz_questions').getFullList({ fields: 'id,answer' })
+    check('koleksi quiz_questions terkunci dari klien (0 baris)', lockedSoal.length === 0, `len=${lockedSoal.length}`)
+    const lessonDetail = await pb.send(`/api/ekoteologi/lessons/${les1.id}`, { method: 'GET', requestKey: null })
+    check(
+      'detail pelajaran: blok + next_lesson_id',
+      lessonDetail?.blocks?.length === 2 && lessonDetail?.next_lesson_id === les2.id,
+      JSON.stringify(lessonDetail),
+    )
+    const complete1 = await pb.send(`/api/ekoteologi/lessons/${les1.id}/complete`, { method: 'POST', body: {}, requestKey: null })
+    const complete2 = await pb.send(`/api/ekoteologi/lessons/${les2.id}/complete`, { method: 'POST', body: {}, requestKey: null })
+    check(
+      'complete pelajaran berurutan → modul tuntas (sekali)',
+      complete1?.lessons_done === 1 && complete1?.just_completed === false && complete2?.lessons_done === 2 && complete2?.just_completed === true,
+      JSON.stringify({ complete1, complete2 }),
+    )
+    const quizIntro = await pb.send(`/api/ekoteologi/modules/${mod.id}/quiz`, { method: 'GET', requestKey: null })
+    check('intro kuis: 4 soal + ambang 70 + poin 20', quizIntro?.question_count === 4 && quizIntro?.pass_percent === 70 && quizIntro?.points === 20, JSON.stringify(quizIntro))
+    const pointsBefore = pb.authStore.record?.points ?? 0
+    const quizPass = await pb.send(`/api/ekoteologi/modules/${mod.id}/quiz`, {
+      method: 'POST',
+      body: { answers: qAnswers.map((choice, i) => ({ question_id: qIds[i], choice })) },
+      requestKey: null,
+    })
+    check(
+      'kuis lulus: poin 20 diputuskan server + points_total terbarui',
+      quizPass?.passed === true && quizPass?.points_awarded === 20 && quizPass?.points_total === pointsBefore + 20,
+      JSON.stringify(quizPass),
+    )
+    await pb.collection('users').authRefresh()
+    check('poin kuis tersinkron ke users.points (authRefresh)', pb.authStore.record?.points === pointsBefore + 20, `points=${pb.authStore.record?.points}`)
+    const quizAgain = await pb.send(`/api/ekoteologi/modules/${mod.id}/quiz`, {
+      method: 'POST',
+      body: { answers: qAnswers.map((choice, i) => ({ question_id: qIds[i], choice })) },
+      requestKey: null,
+    })
+    check(
+      'anti dobel poin: lulus ulang → 0 poin (already_passed_before)',
+      quizAgain?.passed === true && quizAgain?.points_awarded === 0 && quizAgain?.already_passed_before === true,
+      JSON.stringify(quizAgain),
+    )
+
+    // ── 10. notifikasi realtime SSE + broadcast composer + konten harian + dashboard ──
+    console.log('[10] Realtime SSE notifikasi + broadcast + daily-content + dashboard')
+    const admin13 = new PocketBase(BASE)
+    const adminRecord = await admin13.collection('users').create({
+      email: 'admin13@ekoteologi.id',
+      password: 'RahasiaKu123',
+      passwordConfirm: 'RahasiaKu123',
+      full_name: 'Aminah Admin',
+    })
+    await su.collection('users').update(adminRecord.id, { role: 'admin' })
+    await admin13.collection('users').authWithPassword('admin13@ekoteologi.id', 'RahasiaKu123')
+    check('admin13 (role) masuk', admin13.authStore.record?.role === 'admin')
+
+    const segments = await admin13.send('/api/ekoteologi/admin/push/segments', { method: 'GET', requestKey: null })
+    check('preview segmen (admin): 4 segmen', Array.isArray(segments?.items) && segments.items.length === 4, JSON.stringify(segments))
+
+    // realtime: subscribe sebelum broadcast — notifikasi baru tampa polling
+    let realtimeHit = null
+    const waitForRealtime = new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), 10000)
+      pb.collection('notifications')
+        .subscribe('*', (msg) => {
+          clearTimeout(t)
+          resolve(msg)
+        })
+        .then((unsub) => {
+          waitForRealtime.unsub = unsub
+        })
+    })
+    await new Promise((r) => setTimeout(r, 800)) // beri waktu SSE tersambung
+    const broadcast = await admin13.send('/api/ekoteologi/admin/push/broadcast', {
+      method: 'POST',
+      body: { title: 'Broadcast Realtime E2E', body: 'Pengumuman langsung ke semua pengguna.', segment: 'all' },
+      requestKey: null,
+    })
+    check(
+      'broadcast via route (admin): rekap penerima',
+      broadcast?.id && broadcast?.recipients >= 2 && typeof broadcast?.sent === 'number',
+      JSON.stringify(broadcast),
+    )
+    realtimeHit = await waitForRealtime
+    check(
+      'realtime SSE: notifikasi broadcast diterima TANPA polling',
+      !!realtimeHit && realtimeHit?.record?.title === 'Broadcast Realtime E2E',
+      JSON.stringify(realtimeHit?.record?.title),
+    )
+    if (waitForRealtime.unsub) await waitForRealtime.unsub()
+    const broadcastUser = await pb.collection('notifications').getFullList({ filter: 'title = "Broadcast Realtime E2E"' })
+    check('broadcast terbaca user (in-app)', broadcastUser.length === 1 && broadcastUser[0].payload?.kind === 'broadcast', JSON.stringify(broadcastUser.map((n) => n.title)))
+
+    const daily = await pb.send('/api/ekoteologi/daily-content', { method: 'GET', requestKey: null })
+    check(
+      'konten harian via route: selalu 200 (fallback bank atau terjadwal)',
+      daily && typeof daily.fallback === 'boolean' && !!daily.body && !!daily.source,
+      JSON.stringify(daily),
+    )
+    const dashboard = await verifier.send('/api/ekoteologi/admin/dashboard', { method: 'GET', requestKey: null })
+    check(
+      'dashboard agregasi via route (staff): KPI + chart',
+      dashboard?.users?.total >= 3 && dashboard?.scans && Array.isArray(dashboard?.charts?.daily) && dashboard.charts.daily.length === 14,
+      JSON.stringify({ u: dashboard?.users, s: dashboard?.scans }),
+    )
+
+    // ── 11. logout ──
+    console.log('[11] Logout')
     pb.authStore.clear()
     check('authStore bersih setelah logout', !pb.authStore.isValid && pb.authStore.token === '')
   } finally {

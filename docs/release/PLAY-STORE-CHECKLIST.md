@@ -95,6 +95,67 @@ Isi juga di Play Console:
 Jalankan matriks di `docs/qa/DEVICE-MATRIX.md` — hasil ditempel ke laporan
 sprint berikutnya / demo review PO.
 
+---
+
+# Pembaruan Sprint 13 — rilis ulang v1.1.0 (internal testing, penutup migrasi PocketBase)
+
+> Laporan lengkap: `docs/sprint/sprint-13.md` · release notes:
+> `docs/release/RELEASE-NOTES-v1.1.0.md`. Server kini **PocketBase v0.40.3**
+> (migrasi FastAPI → PocketBase tuntas, Sprint 9–13).
+
+## 13.0 Perubahan sejak v1.0.0 (sampai checklist lama di atas)
+
+- [x] Backend = satu binary PocketBase + `pb_hooks`/`pb_migrations` (Redis &
+  Postgres pensiun; compose sudah diganti Sprint 9).
+- [x] Semua logika bisnis server-side: scan AI, klaim/verifikasi, gamifikasi,
+  **kuis (sprint 13)** — kunci jawaban tidak pernah ke klien.
+- [x] Notifikasi realtime (SSE) + pipeline push FCM + composer broadcast
+  aktif; **fallback mode=log** bila kredensial belum ada (wajib diuji — lulus).
+- [x] Backup otomatis `pb_data` (bawaan PB, env `BACKUP_*`), cleanup data
+  sementara, error → Sentry/PB logs, dashboard agregasi admin.
+
+## 13.1 Prasyarat server untuk rilis ini
+
+- [ ] `PUSH_MODE=fcm` + `FCM_PROJECT_ID` + `FCM_CREDENTIALS_FILE` (service
+  account JSON dgn role *Firebase Cloud Messaging API Sender*) — **item
+  terbuka lama, sekarang benar-benar memblokir push** (tanpa ini notif tetap
+  hidup in-app/realtime, push hanya log). Tanpa kredensial juga aman:
+  hook fallback otomatis ke mode log (teruji otomatis).
+- [ ] `BACKUP_ENABLED=1` (default) + verifikasi arsip muncul di `/api/backups`.
+- [ ] (Opsional) `SENTRY_DSN` untuk error reporting server.
+- [ ] Reverse proxy dgn security header — contoh Caddy/Nginx di
+  `pocketbase/README.md` §"Security header reverse proxy".
+- [ ] Deploy staging: `./pocketbase serve` dgn `pb_migrations`+`pb_hooks` baru;
+  migrasi `1757700000_sprint13_bootstrap.js` berjalan sendiri.
+
+## 13.2 Build artefak v1.1.0
+
+- [ ] `EKO_VERSION_CODE=2`, `EKO_VERSION_NAME=1.1.0` (naik versionCode!).
+- [ ] `./gradlew bundleRelease` (AAB) + `./gradlew assembleDebug` (uji adb) —
+  build debug lokal sukses (sprint 13); release signing tetap via env
+  `EKO_STORE_*` (lihat §1 di atas).
+- [ ] Regresi otomatis hijau sebelum unggah: `make pb-test` (254 asersi) +
+  `make pb-e2e` (51 asersi) + `make pb-smoke`; lint/test/build admin & mobile.
+
+## 13.3 Data safety & kebijakan (pembaruan)
+
+- Tidak ada pengumpulan data baru vs v1.0.0 (email/nama/kota/foto + token
+  push FCM — token sudah ada sejak Sprint 6). Realtime SSE = koneksi baca
+  milik user, tanpa data baru.
+- Deklarasi AI tetap sama (analisis foto; quote selalu bank terkurasi).
+- Catatan rilis internal: salin dari `docs/release/RELEASE-NOTES-v1.1.0.md`.
+
+## 13.4 QA cross-device Sprint 13 (perangkat tersedia)
+
+- [ ] Matriks umum: `docs/qa/DEVICE-MATRIX.md`.
+- [ ] Kuis: kerjakan → lulus → poin sekali; ulangi → tanpa poin ("sudah
+  pernah"); gagal → tanpa poin, boleh coba lagi.
+- [ ] Notifikasi realtime: minta admin approve misi → notif muncul tanpa
+  tarik-ulang; push FCM masuk saat kredensial terpasang.
+- [ ] Broadcast: admin kirim segmen "semua" → tester menerima in-app + push.
+- [ ] Konten harian: kartu terisi (terjadwal atau fallback) + aksi hari ini.
+- [ ] Offline: kartu kutipan tampil dari bank lokal; badge luring tampil.
+
 ## 6. Setelah rilis
 
 - [ ] Pantau error: Sentry (setelah DSN aktif) + `GET /v1/admin/metrics/events`

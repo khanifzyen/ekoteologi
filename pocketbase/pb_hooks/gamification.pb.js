@@ -12,7 +12,8 @@
 //      dari ledger (paritas GET /v1/streak FastAPI).
 //   4. Cron reminder streak (`cronAdd`, env STREAK_REMINDER_CRON) + route
 //      trigger manual POST /api/ekoteologi/cron/streak-reminder (admin) —
-//      menulis notifikasi in-app; pengiriman push FCM menyusul Sprint 13.
+//      menulis notifikasi in-app; push FCM + realtime mengalir otomatis via
+//      pipeline notifikasi sprint 13 (push.pb.js).
 //   5. Engine review klaim — hook REQUEST guard (staff saja, keputusan
 //      diserverkan) + hook MODEL user_missions: submitted→approved → ledger +
 //      notifikasi + event + streak + badge (satu transaksi dgn save klaim);
@@ -860,93 +861,21 @@ routerAdd("POST", "/api/ekoteologi/cron/streak-reminder", (e) => {
   return e.json(200, { sent: sent })
 }, $apis.requireAuth("users"))
 
-// ═════ 5. Engine review klaim — guard request (staff) + efek transaksional ═════
-// PATCH user_missions kini hanya utk keputusan verifier/admin (updateRule staff
-// + guard ini): status/points_awarded/reviewed_* DISERVERKAN — klien tidak
-// bisa menetapkan poin sendiri. Efek poin/notif/streak/badge hidup di hook
-// MODEL di bawah (satu transaksi dgn save klaim).
+// ═════ 5. Engine review klaim — FULL ATOMIK di hook request (staff) ═════
+// PATCH user_missions kini hanya utk keputusan verifier/admin (updateRule
+// staff): keputusan, poin, notifikasi, event, streak, badge, dan audit
+// berjalan dalam SATU transaksi eksplisit — gagal di tengah jalan = tidak
+// ada yang berubah (klaim tetap `submitted`, poin tidak terpengaruh).
+// Ini menutup temuan sprint 12: efek di hook model SETELAH e.next() pada
+// jalur request tidak ikut ter-rollback (save klaim sudah commit).
+//
+// Pola (diverifikasi empiris sprint 13): hook request boleh TIDAK memanggil
+// e.next() dan menyimpan record sendiri di dalam runInTransaction lalu
+// menutup respons dgn e.json(...) — hasilnya tersimpan permanen. Hook model
+// di bawah tetap menjaga transisi status (juga utk tulisan internal), tetapi
+// tidak lagi menjalankan efek (mencegah dobel).
 
 onRecordUpdateRequest((e) => {
-  const auth = e.auth
-  if (!auth) {
-    throw new ApiError(403, "Butuh autentikasi.")
-  }
-  const isSuperuser = auth.collection().name === "_superusers"
-  const role = isSuperuser ? "admin" : auth.get("role") || ""
-  if (role !== "admin" && role !== "verifier") {
-    throw new ApiError(403, "Hanya verifier dan admin yang dapat meninjau klaim.")
-  }
-  const oldStatus = String(e.record.original().get("status") || "")
-  if (oldStatus !== "submitted") {
-    throw new ApiError(409, "Klaim ini sudah direview sebelumnya — muat ulang antrian.")
-  }
-  const body = e.requestInfo().body || {}
-  const decision = body.status
-  if (decision !== "approved" && decision !== "rejected") {
-    throw new ApiError(400, "Keputusan harus 'approved' atau 'rejected'.")
-  }
-  const note = typeof body.review_note === "string" ? body.review_note.trim() : ""
-  if (decision === "rejected" && !note) {
-    throw new ApiError(
-      400,
-      "Catatan wajib diisi saat menolak — agar user tahu apa yang perlu diperbaiki."
-    )
-  }
-  let mission = null
-  try {
-    mission = e.app.findRecordById("missions", e.record.get("mission"))
-  } catch (err) {
-    throw new ApiError(409, "Misi klaim ini sudah tidak ada.")
-  }
-  const now = new Date().toISOString()
-  e.record.set("reviewed_at", now)
-  if (!isSuperuser) {
-    e.record.set("reviewed_by", auth.id) // relasi users — id superuser tak valid
-  }
-  if (decision === "rejected") {
-    e.record.set("status", "rejected")
-    e.record.set("points_awarded", 0)
-    e.record.set("review_note", note)
-  } else {
-    e.record.set("status", "approved")
-    e.record.set("points_awarded", mission.get("points") || 0)
-    if (note) e.record.set("review_note", note)
-  }
-  return e.next()
-}, "user_missions")
-
-// Hook MODEL: transisi status dijaga + efek keputusan review (satu transaksi
-// dgn save — ledger/notif/event/streak/badge atomik dgn perubahan klaim).
-// Transisi internal yang diizinkan: rejected→submitted (klaim ulang via
-// route), in_progress→in_progress/approved (progres auto_scan via hook scan).
-onRecordUpdate((e) => {
-  const oldStatus = String(e.record.original().get("status") || "")
-  const newStatus = String(e.record.get("status") || "")
-  const allowed =
-    oldStatus === "" || // temuan v0.40: save lanjutan record baru di dalam tx yang sama memicu hook update dgn original() kosong
-    oldStatus === newStatus ||
-    (oldStatus === "submitted" && (newStatus === "approved" || newStatus === "rejected")) ||
-    (oldStatus === "rejected" && newStatus === "submitted") ||
-    (oldStatus === "in_progress" && (newStatus === "in_progress" || newStatus === "approved"))
-  if (!allowed) {
-    throw new BadRequestError(
-      "Transisi status klaim tidak diizinkan (" + oldStatus + " → " + newStatus + ")."
-    )
-  }
-  e.next()
-
-  if (oldStatus !== "submitted") return // hanya keputusan review yang berefek
-  const uid = e.record.get("user")
-  const missionId = e.record.get("mission")
-  let mission = null
-  try {
-    mission = e.app.findRecordById("missions", missionId)
-  } catch (err) {
-    throw new BadRequestError("Misi klaim ini sudah tidak ada.")
-  }
-  const title = mission.get("title") || "Misi"
-
-  // ── blok bantu (self-contained — duplikasi antar hook DISENGAJA) ──
   function envInt(name, fallback) {
     const raw = $os.getenv(name)
     if (!raw) return fallback
@@ -962,37 +891,9 @@ onRecordUpdate((e) => {
   function pbDate(d) {
     return isoDay(d) + " 00:00:00.000Z"
   }
-  function dayOf(v) {
-    // Tanggal LOKAL dari timestamp sistem (created — UTC) atau Date.
-    if (!v) return ""
-    if (v instanceof Date) return isoDay(v)
-    const d = new Date(String(v).replace(" ", "T"))
-    return isNaN(d.getTime()) ? String(v).slice(0, 10) : isoDay(d)
-  }
   function dayOfStored(v) {
-    // Tanggal dari field date yang KITA tulis sbg tanggal-lokal@UTC-tengah
-    // malam (last_active_date) — ambil bagian tanggalnya saja (jangan
-    // dikonversi ulang lewat zona waktu).
     if (!v) return ""
     return String(v instanceof Date ? v.toISOString() : v).slice(0, 10)
-  }
-  function jsonValue(raw) {
-    if (raw === undefined || raw === null) return null
-    if (typeof raw === "string") {
-      try {
-        return JSON.parse(raw)
-      } catch (err) {
-        return null
-      }
-    }
-    if (typeof raw === "object" && raw.length !== undefined && typeof raw.count === "undefined") {
-      try {
-        return JSON.parse(String.fromCharCode.apply(null, raw))
-      } catch (err) {
-        return null
-      }
-    }
-    return raw
   }
   function notifyUser(app, uid2, ntitle, nbody, ntype, payload) {
     try {
@@ -1019,6 +920,7 @@ onRecordUpdate((e) => {
     }
   }
   function addLedger(app, uid2, amount, source, refId, note) {
+    // TIDAK di-catch: gagal ledger = seluruh transaksi dibatalkan.
     const rec = new Record(app.findCollectionByNameOrId("point_transactions"))
     rec.set("user", uid2)
     rec.set("amount", amount)
@@ -1033,10 +935,10 @@ onRecordUpdate((e) => {
     try {
       user = app.findRecordById("users", uid2)
     } catch (err) {
-      return
+      return { bonus: 0 }
     }
     const last = dayOfStored(user.get("last_active_date"))
-    if (last === today) return
+    if (last === today) return { bonus: 0 }
     let streak = 1
     const y = new Date()
     y.setDate(y.getDate() - 1)
@@ -1063,13 +965,29 @@ onRecordUpdate((e) => {
       )
     }
     addEvent(app, uid2, "streak_hari", { streak: streak, bonus: bonus })
+    return { bonus: bonus }
   }
   function syncBadges(app, uid2, delta) {
-    // Temuan v0.40: $dbx.exp TIDAK mengikat named params dan .all()/.one()
-    // dbx gagal ("must be a pointer") di JSVM — statistik memakai
-    // findRecordsByFilter (binding params teruji) + agregasi di JS; volume
-    // baris per-user kecil utk skala MVP. Baris yang baru ditulis dalam tx
-    // berjalan tidak terlihat oleh query ini — dikompensasi lewat delta.
+    function jsonValue(raw) {
+      if (raw === undefined || raw === null) return null
+      if (typeof raw === "string") {
+        try {
+          return JSON.parse(raw)
+        } catch (err) {
+          return null
+        }
+      }
+      if (typeof raw === "object" && raw.length !== undefined && typeof raw.count === "undefined") {
+        try {
+          return JSON.parse(String.fromCharCode.apply(null, raw))
+        } catch (err) {
+          return null
+        }
+      }
+      return raw
+    }
+    // Baris yang baru ditulis dalam tx berjalan tidak terlihat oleh query —
+    // dikompensasi lewat delta (temuan sprint 12).
     const scanRows =
       app.findRecordsByFilter("scans", "user = {:u} && points > 0", "", 0, 0, { u: uid2 }) || []
     const missionRows =
@@ -1122,7 +1040,7 @@ onRecordUpdate((e) => {
       try {
         app.save(rec)
       } catch (err) {
-        continue
+        continue // idempoten — balapan unique index
       }
       earned.push({ code: b.get("code") || "", name: b.get("name") || "" })
       notifyUser(
@@ -1137,54 +1055,183 @@ onRecordUpdate((e) => {
     return earned
   }
 
-  if (newStatus === "approved") {
-    const points = mission.get("points") || 0
-    // Catatan semantik (terverifikasi empiris): pada jalur request, efek di
-    // hook model SETELAH e.next() TIDAK di-rollback bila hook melempar error
-    // sesudahnya (berbeda dgn runInTransaction eksplisit di route klaim/scan
-    // yang atomik). Karena itu ledger — efek paling kritis — dijalankan lebih
-    // dulu dan gagalnya dilempar; efek sisanya di-catch agar keputusan
-    // verifier tetap 200 (badge yang telat ter-cover lazy GET /badges).
-    addLedger(e.app, uid, points, "mission", e.record.id, "Misi: " + title)
-    try {
-      notifyUser(
-        e.app,
-        uid,
-        "Misi disetujui!",
-        '"' + title + '" diverifikasi — +' + points + " poin masuk ke akunmu.",
-        "mission",
-        { claim_id: e.record.id, mission_id: missionId, status: "approved", points: points }
-      )
-      addEvent(e.app, uid, "misi_selesai", {
-        mission_id: missionId,
-        points: points,
-        claim_id: e.record.id,
-      })
-      const stReview = touchStreak(e.app, uid)
-      syncBadges(e.app, uid, {
-        mission: 1,
-        points: points + ((stReview && stReview.bonus) || 0),
-      })
-    } catch (err) {
-      console.log("REVIEW: efek non-kritis gagal (badge menyusul via lazy): " + err)
-    }
-    console.log(
-      "MISSION APPROVED claim=" + e.record.id + " user=" + uid + " mission=" + missionId +
-        " points=" + points
-    )
-  } else {
-    const note = e.record.get("review_note") || ""
-    notifyUser(
-      e.app,
-      uid,
-      "Misi perlu diperbaiki",
-      '"' + title + '" ditolak — ' + note + " Kamu bisa unggah ulang bukti di layar Misi.",
-      "mission",
-      { claim_id: e.record.id, mission_id: missionId, status: "rejected" }
-    )
-    console.log("MISSION REJECTED claim=" + e.record.id + " user=" + uid + " mission=" + missionId)
+  const auth = e.auth
+  if (!auth) {
+    throw new ApiError(403, "Butuh autentikasi.")
   }
+  const isSuperuser = auth.collection().name === "_superusers"
+  const role = isSuperuser ? "admin" : auth.get("role") || ""
+  if (role !== "admin" && role !== "verifier") {
+    throw new ApiError(403, "Hanya verifier dan admin yang dapat meninjau klaim.")
+  }
+  const oldStatus = String(e.record.original().get("status") || "")
+  const oldPoints = e.record.original().get("points_awarded") || 0
+  if (oldStatus !== "submitted") {
+    throw new ApiError(409, "Klaim ini sudah direview sebelumnya — muat ulang antrian.")
+  }
+  const body = e.requestInfo().body || {}
+  const decision = body.status
+  if (decision !== "approved" && decision !== "rejected") {
+    throw new ApiError(400, "Keputusan harus 'approved' atau 'rejected'.")
+  }
+  const note = typeof body.review_note === "string" ? body.review_note.trim() : ""
+  if (decision === "rejected" && !note) {
+    throw new ApiError(
+      400,
+      "Catatan wajib diisi saat menolak — agar user tahu apa yang perlu diperbaiki."
+    )
+  }
+  let mission = null
+  try {
+    mission = e.app.findRecordById("missions", e.record.original().get("mission"))
+  } catch (err) {
+    throw new ApiError(409, "Misi klaim ini sudah tidak ada.")
+  }
+  const uid = e.record.original().get("user")
+  const missionId = mission.id
+  // Serverkan pemilik & misi klaim — form.Load sudah menerapkan body PATCH
+  // sebelum hook, tanpa ini verifier bisa mengalihkan klaim ke user lain.
+  e.record.set("user", uid)
+  e.record.set("mission", missionId)
+  const title = mission.get("title") || "Misi"
+
+  const now = new Date().toISOString()
+  e.record.set("reviewed_at", now)
+  if (!isSuperuser) {
+    e.record.set("reviewed_by", auth.id) // relasi users — id superuser tak valid
+  }
+  if (decision === "rejected") {
+    e.record.set("status", "rejected")
+    e.record.set("points_awarded", 0)
+    e.record.set("review_note", note)
+  } else {
+    e.record.set("status", "approved")
+    e.record.set("points_awarded", mission.get("points") || 0)
+    if (note) e.record.set("review_note", note)
+  }
+
+  try {
+    e.app.runInTransaction(function (txApp) {
+      txApp.save(e.record)
+      if (decision === "approved") {
+        const points = mission.get("points") || 0
+        // Ledger lebih dulu & gagalnya melempar → klaim tetap submitted.
+        addLedger(txApp, uid, points, "mission", e.record.id, "Misi: " + title)
+        try {
+          notifyUser(
+            txApp,
+            uid,
+            "Misi disetujui!",
+            '"' + title + '" diverifikasi — +' + points + " poin masuk ke akunmu.",
+            "mission",
+            { claim_id: e.record.id, mission_id: missionId, status: "approved", points: points }
+          )
+          addEvent(txApp, uid, "misi_selesai", {
+            mission_id: missionId,
+            points: points,
+            claim_id: e.record.id,
+          })
+          const stReview = touchStreak(txApp, uid)
+          syncBadges(txApp, uid, {
+            mission: 1,
+            points: points + ((stReview && stReview.bonus) || 0),
+          })
+        } catch (err) {
+          console.log("REVIEW: efek non-kritis gagal (badge menyusul via lazy): " + err)
+        }
+        console.log(
+          "MISSION APPROVED claim=" + e.record.id + " user=" + uid + " mission=" + missionId +
+            " points=" + points
+        )
+      } else {
+        notifyUser(
+          txApp,
+          uid,
+          "Misi perlu diperbaiki",
+          '"' + title + '" ditolak — ' + note + " Kamu bisa unggah ulang bukti di layar Misi.",
+          "mission",
+          { claim_id: e.record.id, mission_id: missionId, status: "rejected" }
+        )
+        console.log("MISSION REJECTED claim=" + e.record.id + " user=" + uid + " mission=" + missionId)
+      }
+      // Audit manual — rantai hook request berhenti di e.json() sehingga
+      // hook audit umum tidak berjalan utk PATCH ini.
+      let actorLabel = isSuperuser ? "superuser" : "user"
+      const recAudit = new Record(txApp.findCollectionByNameOrId("audit_logs"))
+      recAudit.set("actor", isSuperuser ? "" : auth.id)
+      recAudit.set("action", "update")
+      recAudit.set("entity", "user_missions")
+      recAudit.set("entity_id", e.record.id)
+      recAudit.set("diff", {
+        status: { old: oldStatus, new: decision },
+        points_awarded: { old: oldPoints, new: e.record.get("points_awarded") || 0 },
+        review_note: note,
+        _actor: actorLabel,
+      })
+      txApp.save(recAudit)
+    })
+  } catch (err) {
+    console.log("REVIEW gagal (rollback — tidak ada yang berubah): " + err)
+    throw new ApiError(
+      500,
+      "Keputusan review tidak dapat diproses — tidak ada yang berubah. Silakan coba lagi."
+    )
+  }
+  // Respons eksplisit (rantai default tidak dijalankan — save sudah kami lakukan).
+  return e.json(200, e.record.publicExport())
 }, "user_missions")
+
+// Hook MODEL: transisi status dijaga (juga utk tulisan internal: resubmit
+// klaim ditolak via route, progres auto_scan via hook scan). EFEK KEPUTUSAN
+// review pindah ke hook request di atas (full atomik — sprint 13) sehingga
+// hook ini tidak lagi memberi poin/notif — mencegah dobel efek.
+// Transisi internal yang diizinkan: rejected→submitted (klaim ulang via
+// route), in_progress→in_progress/approved (progres auto_scan via hook scan).
+onRecordUpdate((e) => {
+  const oldStatus = String(e.record.original().get("status") || "")
+  const newStatus = String(e.record.get("status") || "")
+  const allowed =
+    oldStatus === "" || // temuan v0.40: save lanjutan record baru di dalam tx yang sama memicu hook update dgn original() kosong
+    oldStatus === newStatus ||
+    (oldStatus === "submitted" && (newStatus === "approved" || newStatus === "rejected")) ||
+    (oldStatus === "rejected" && newStatus === "submitted") ||
+    (oldStatus === "in_progress" && (newStatus === "in_progress" || newStatus === "approved"))
+  if (!allowed) {
+    throw new BadRequestError(
+      "Transisi status klaim tidak diizinkan (" + oldStatus + " → " + newStatus + ")."
+    )
+  }
+  return e.next()
+}, "user_missions")
+
+// ═════ 6b. Event "misi baru" — broadcast saat admin menerbitkan misi ═════
+// Paritas `announce_new_mission` (services/broadcast.py FastAPI, Sprint 8):
+// SATU baris broadcast `user=""` — tampil utk tiap user di in-app list — dan
+// pipeline push (hook afterCreate notifications di push.pb.js) mengirimkannya
+// ke perangkat sesuai segmen "all".
+
+onRecordAfterCreateSuccess((e) => {
+  if (!e.record.get("is_active")) return
+  try {
+    const rec = new Record(e.app.findCollectionByNameOrId("notifications"))
+    rec.set("title", "Misi baru!")
+    rec.set(
+      "body",
+      '"' + (e.record.get("title") || "Misi") + '" menantimu — selesaikan dan raih +' +
+        (e.record.get("points") || 0) + " poin."
+    )
+    rec.set("type", "mission")
+    rec.set("payload", {
+      kind: "new_mission",
+      mission_id: e.record.id,
+      segment: "all",
+    })
+    e.app.save(rec)
+    console.log("MISSION NEW broadcast misi=" + e.record.id)
+  } catch (err) {
+    console.log("MISSION NEW: broadcast gagal ditulis: " + err)
+  }
+}, "missions")
 
 // ═════ 6. Hook MODEL scans create — streak, progres auto_scan, badge ═════
 // Dipicu juga oleh tulisan internal (route scan, transaksional — sprint 11).

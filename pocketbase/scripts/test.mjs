@@ -4,6 +4,11 @@
  * Sprint 10 — +rate limit settings, audit log, guard login, autodate.
  * Sprint 11 — +route scan AI (mock), cache llm_cache + hit rate, kuota harian,
  *             ledger append-only + sinkron users.points.
+ * Sprint 13 — +e-learning (kuis server-side + anti dobel poin), konten
+ *             harian + cron publish, broadcast & pipeline push FCM (mock
+ *             OAuth/FCM — JWT RS256 diverifikasi), dashboard agregasi,
+ *             cleanup app_settings/llm_cache, backup, guard read_at, dan
+ *             instance fault-injection utk rollback review + fallback log.
  *
  * Boot instance uji sekali pakai (pb_data sementara), lalu asersi via HTTP:
  *   1. /api/health + route kustom /api/ekoteologi/ping
@@ -16,15 +21,27 @@
  *   8. Autodate & OAuth2 (sprint 10)
  *   9. Scan AI: auth/validasi foto, mock LLM tervalidasi, cache + hit rate,
  *      duplikat, kuota harian 429, ledger + sinkron poin, audit (sprint 11)
+ *  10. Misi, verifikasi & gamifikasi: klaim 3 mode, engine review, level,
+ *      streak, badge, cron reminder (sprint 12)
+ *  11. E-learning: modul/pelajaran/kuis server-side, anti dobel poin per
+ *      modul, event/streak/badge, koleksi soal terkunci (sprint 13)
+ *  12. Konten harian: route wisdom card + cron auto-publish idempoten
+ *  13. Broadcast & push FCM: segmen, composer admin, pipeline push mode fcm
+ *      via endpoint mock (OAuth JWT RS256 + messages:send + token mati 410)
+ *  14. Ops: dashboard agregasi, cleanup kedaluwarsa, backup, guard read_at
+ *  15. Instance fault-injection: rollback full-atomik review + Sentry +
+ *      fallback push mode=log
  *
  * Jalankan: make pb-test   (butuh binary ./pocketbase — `make pb-install`)
  */
 import { spawn, spawnSync } from "node:child_process"
-import { rmSync } from "node:fs"
+import { rmSync, writeFileSync, mkdtempSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import os from "node:os"
 import net from "node:net"
+import http from "node:http"
+import crypto from "node:crypto"
 
 const DIR = path.dirname(fileURLToPath(import.meta.url))
 const PB_DIR = path.resolve(DIR, "..")
@@ -92,6 +109,87 @@ async function freePort(preferred) {
 const tmpData = path.join(os.tmpdir(), `pb-test-${process.pid}-${Date.now()}`)
 let server = null
 
+// ── mock Google endpoints (OAuth token + FCM v1) + mock Sentry store ──
+// Kredensial FCM asli item terbuka (sejak Sprint 6) — alur push FCM diuji
+// terhadap endpoint mock lokal; JWT RS256 yang dibuat hook diverifikasi
+// sungguhan dgn crypto Node (server Python/Go tidak ikut campur).
+const mockState = {
+  oauth: { claims: [] },
+  fcm: { calls: [] },
+  sentry: [],
+}
+const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 })
+const PRIVATE_PEM = privateKey.export({ type: "pkcs8", format: "pem" }).toString()
+const SA_FILE = path.join(mkdtempSync(path.join(os.tmpdir(), "fcm-sa-")), "sa.json")
+writeFileSync(
+  SA_FILE,
+  JSON.stringify({
+    client_email: "ekoteologi-test@ekoteologi-test.iam.gserviceaccount.com",
+    private_key: PRIVATE_PEM,
+    project_id: "ekoteologi-test",
+  })
+)
+const mockHttp = http.createServer((req, res) => {
+  let body = ""
+  req.on("data", (c) => (body += c))
+  req.on("end", () => {
+    res.setHeader("Content-Type", "application/json")
+    if (req.url === "/oauth") {
+      const assertion = new URLSearchParams(body).get("assertion") || ""
+      const [h, p, s] = assertion.split(".")
+      let ok = false
+      let claims = null
+      try {
+        ok = crypto.verify("RSA-SHA256", Buffer.from(`${h}.${p}`), publicKey, Buffer.from(s, "base64url"))
+        claims = JSON.parse(Buffer.from(p, "base64url").toString())
+      } catch {
+        ok = false
+      }
+      mockState.oauth.claims.push({ ok, claims })
+      if (!ok) {
+        res.statusCode = 401
+        return res.end("{}")
+      }
+      return res.end(JSON.stringify({ access_token: "mock-oauth-token", expires_in: 3600 }))
+    }
+    if (req.url.startsWith("/fcm")) {
+      let payload = {}
+      try {
+        payload = JSON.parse(body || "{}")
+      } catch {}
+      const token = payload?.message?.token || ""
+      mockState.fcm.calls.push({
+        auth: req.headers["authorization"] || "",
+        token,
+        title: payload?.message?.notification?.title || "",
+      })
+      if (token.startsWith("DEAD")) {
+        res.statusCode = 410 // token perangkat mati → hook menghapus barisnya
+        return res.end("{}")
+      }
+      return res.end(JSON.stringify({ name: "projects/ekoteologi-test/messages/" + mockState.fcm.calls.length }))
+    }
+    if (/^\/api\/\d+\/store\/?$/.test(req.url)) {
+      try {
+        mockState.sentry.push(JSON.parse(body || "{}"))
+      } catch {
+        mockState.sentry.push({ raw: body })
+      }
+      return res.end("{}")
+    }
+    res.statusCode = 404
+    res.end("{}")
+  })
+})
+
+async function startMock() {
+  await new Promise((resolve) => mockHttp.listen(0, "127.0.0.1", resolve))
+  mockHttp.unref() // jangan tahan proses uji tetap hidup
+  return mockHttp.address().port
+}
+const MOCK_PORT = await startMock()
+const MOCK = `http://127.0.0.1:${MOCK_PORT}`
+
 async function startServer() {
   rmSync(tmpData, { recursive: true, force: true })
   const port = await freePort(PORT)
@@ -122,8 +220,18 @@ async function startServer() {
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
-      // Kuota harian kecil agar uji 429 murah (env hanya utk instance uji).
-      env: { ...process.env, SCAN_DAILY_LIMIT: "3", LLM_MODE: "mock" },
+      // Kuota harian kecil agar uji 429 murah; push mode fcm dgn kredensial
+      // service account tiruan + endpoint OAuth/FCM mock (env hanya instance uji).
+      env: {
+        ...process.env,
+        SCAN_DAILY_LIMIT: "3",
+        LLM_MODE: "mock",
+        PUSH_MODE: "fcm",
+        FCM_PROJECT_ID: "ekoteologi-test",
+        FCM_CREDENTIALS_FILE: SA_FILE,
+        FCM_OAUTH_URL: `${MOCK}/oauth`,
+        FCM_SEND_URL: `${MOCK}/fcm`,
+      },
     }
   )
   server.stdout.on("data", (d) => process.env.PB_TEST_VERBOSE && process.stdout.write(d))
@@ -860,6 +968,547 @@ async function main() {
       const freshM = await mkMission({ title: "Misi Boleh Dihapus", points: 1, verification: "manual", type: "daily", is_active: false })
       const delFresh = await api("DELETE", `/api/collections/missions/records/${freshM.data?.id}`, { token: suToken })
       check("hapus misi tanpa klaim tetap bisa", delFresh.status === 200 || delFresh.status === 204, `status ${delFresh.status}`)
+    }
+
+    // ── 11. e-learning: kuis server-side + anti dobel poin (sprint 13) ──
+    console.log("[11] Sprint 13: e-learning — penilaian kuis server-side & anti dobel poin")
+    let quizModuleId = ""
+    let lesson1Id = ""
+    let lesson2Id = ""
+    {
+      // user G — protagonis e-learning (poin mulai 0)
+      const okG = await api("POST", "/api/collections/users/records", {
+        body: { email: "gita@ekoteologi.id", password: "RahasiaKu123", passwordConfirm: "RahasiaKu123", full_name: "Gita Belajar" },
+      })
+      check("registrasi user G", okG.status === 200)
+      const gId = okG.data?.id
+      const gToken = await auth("users", "gita@ekoteologi.id", "RahasiaKu123")
+
+      // modul + 2 pelajaran + kuis 4 soal (superuser — konten belajar)
+      const mod = await api("POST", "/api/collections/modules/records", {
+        token: suToken,
+        body: { title: "Modul Uji Sprint 13", slug: "modul-uji-13", description: "Modul e-learning uji", cover: "fa-leaf", order: 1, is_published: true },
+      })
+      quizModuleId = mod.data?.id
+      const les1 = await api("POST", "/api/collections/lessons/records", {
+        token: suToken,
+        body: { module: quizModuleId, title: "Pelajaran Pertama", order: 0, content: [
+          { type: "paragraph", text: "Khalifah di bumi menjaga amanahnya." },
+          { type: "quote", text: "Dunia itu hijau dan manis.", arabic: "حُُط", source: "HR Muslim no. 2742" },
+          { type: "tip", text: "Pilah sampah dari rumah." },
+        ] },
+      })
+      lesson1Id = les1.data?.id
+      const les2 = await api("POST", "/api/collections/lessons/records", {
+        token: suToken,
+        body: { module: quizModuleId, title: "Pelajaran Kedua", order: 1, content: [{ type: "paragraph", text: "Lanjutan materi." }] },
+      })
+      lesson2Id = les2.data?.id
+      const quiz = await api("POST", "/api/collections/quizzes/records", {
+        token: suToken,
+        body: { module: quizModuleId },
+      })
+      const answers = [1, 2, 0, 3]
+      const questionIds = []
+      for (let i = 0; i < 4; i++) {
+        const q = await api("POST", "/api/collections/quiz_questions/records", {
+          token: suToken,
+          body: {
+            quiz: quiz.data?.id,
+            question: `Soal ${i + 1}: pilih jawaban benar?`,
+            options: ["A", "B", "C", "D"],
+            answer: answers[i],
+            explanation: `Penjelasan soal ${i + 1}.`,
+            order: i + 1,
+          },
+        })
+        questionIds.push(q.data?.id)
+      }
+      check(
+        "modul/pelajaran/kuis/soal dibuat admin",
+        mod.status === 200 && les1.status === 200 && les2.status === 200 && quiz.status === 200 && questionIds.every(Boolean)
+      )
+
+      // koleksi terkunci: bank soal & progres tidak bisa dibaca/tulis klien
+      const soalByUser = await api("GET", "/api/collections/quiz_questions/records", { token: gToken })
+      check("bank soal TIDAK terbaca user (kunci sprint 13 — kunci jawaban aman)", soalByUser.status === 200 && soalByUser.data?.totalItems === 0, `total=${soalByUser.data?.totalItems}`)
+      const soalBySu = await api("GET", "/api/collections/quiz_questions/records", { token: suToken })
+      check("bank soal tetap terbaca superuser/editor", soalBySu.data?.totalItems === 4)
+      const attemptWrite = await api("POST", "/api/collections/user_quiz_attempts/records", {
+        token: gToken,
+        body: { user: gId, quiz: quiz.data?.id, score: 99, total: 4, passed: true, points_awarded: 999 },
+      })
+      check("user TIDAK bisa menulis user_quiz_attempts (anti manen lencana)", attemptWrite.status >= 400, `status ${attemptWrite.status}`)
+      const progressWrite = await api("POST", "/api/collections/user_module_progress/records", {
+        token: gToken,
+        body: { user: gId, module: quizModuleId, lessons_done: 99, is_completed: true },
+      })
+      check("user TIDAK bisa menulis user_module_progress (progres via route)", progressWrite.status >= 400, `status ${progressWrite.status}`)
+
+      // daftar modul: kartu + progres + cta
+      const list = await api("GET", "/api/ekoteologi/modules", { token: gToken })
+      const card = (list.data?.items || []).find((m) => m.id === quizModuleId)
+      check(
+        "GET /modules: kartu modul (2 pelajaran, 4 soal, poin 20, CTA Mulai)",
+        list.status === 200 && !!card && card.lesson_count === 2 && card.quiz_question_count === 4 &&
+          card.quiz_points === 20 && card.progress.lessons_done === 0 && card.cta === "Mulai",
+        JSON.stringify(card)
+      )
+      check("GET /modules: ringkasan N/M + modul draf tidak bocor", list.data?.summary?.total >= 1 && list.data?.summary?.completed === 0 && !(list.data?.items || []).some((m) => m.title === "Modul Draf"))
+      const listAnon = await api("GET", "/api/ekoteologi/modules")
+      check("GET /modules tanpa token → 401", listAnon.status === 401)
+
+      // detail modul: soal TANPA kunci + quiz_best kosong
+      const detail = await api("GET", `/api/ekoteologi/modules/${quizModuleId}`, { token: gToken })
+      check(
+        "GET /modules/{id}: pelajaran urut + intro kuis tanpa kunci jawaban",
+        detail.status === 200 && detail.data?.lessons?.length === 2 && detail.data?.quiz?.question_count === 4 &&
+          detail.data?.quiz?.questions?.every((q) => !("answer" in q) && !("explanation" in q)),
+        JSON.stringify(detail.data?.quiz)
+      )
+      check("GET /modules/{id}: quiz_best kosong sebelum percobaan", detail.data?.quiz_best === null)
+
+      // 404 & validasi
+      const nf = await api("GET", "/api/ekoteologi/modules/tidakada", { token: gToken })
+      check("modul tak dikenal → 404", nf.status === 404)
+      const emptyAnswers = await api("POST", `/api/ekoteologi/modules/${quizModuleId}/quiz`, {
+        token: gToken,
+        body: { answers: [] },
+      })
+      check("submit kuis tanpa jawaban cocok → 400", emptyAnswers.status === 400, JSON.stringify(emptyAnswers.data))
+
+      // percobaan 1: gagal (2/4 = 50% < 70%) — attempt tersimpan, tanpa poin
+      const fail = await api("POST", `/api/ekoteologi/modules/${quizModuleId}/quiz`, {
+        token: gToken,
+        body: { answers: [{ question_id: questionIds[0], choice: 1 }, { question_id: questionIds[1], choice: 2 }] },
+      })
+      check(
+        "kuis gagal (50%): passed=false, poin 0, attempt tercatat",
+        fail.status === 200 && fail.data?.passed === false && fail.data?.percent === 50 && fail.data?.points_awarded === 0 && fail.data?.points_total === 0,
+        JSON.stringify(fail.data)
+      )
+      const attempts1 = await api("GET", "/api/collections/user_quiz_attempts/records", { token: suToken })
+      check("attempt gagal tercatat (riwayat, passed=false)", attempts1.data?.totalItems === 1)
+
+      // percobaan 2: lulus 4/4 → +20 poin SEKALI (ledger + notif + event + streak)
+      const pass = await api("POST", `/api/ekoteologi/modules/${quizModuleId}/quiz`, {
+        token: gToken,
+        body: { answers: answers.map((choice, i) => ({ question_id: questionIds[i], choice })) },
+      })
+      const attemptId = (await api("GET", "/api/collections/user_quiz_attempts/records?sort=-created", { token: suToken })).data?.items?.[0]?.id
+      check(
+        "kuis lulus (100%): poin 20 diputuskan server + review penuh",
+        pass.status === 200 && pass.data?.passed === true && pass.data?.points_awarded === 20 &&
+          pass.data?.points_total === 20 && pass.data?.already_passed_before === false &&
+          pass.data?.review?.every((r) => r.correct === true && typeof r.answer === "number" && !!r.explanation),
+        JSON.stringify(pass.data)
+      )
+      check("pesan lulus berbahasa Indonesia dgn poin", /lulus/i.test(pass.data?.message || "") && /20 poin/.test(pass.data?.message || ""))
+      const gAfter = await api("GET", `/api/collections/users/records/${gId}`, { token: gToken })
+      check("users.points tersinkron (ledger hook): 20", gAfter.data?.points === 20, `points=${gAfter.data?.points}`)
+      check("streak ikut berdetak saat kuis lulus", gAfter.data?.current_streak === 1, JSON.stringify({ s: gAfter.data?.current_streak }))
+      const quizLedger = await api("GET", "/api/collections/point_transactions/records?filter=" + encodeURIComponent('source = "quiz"'), { token: gToken })
+      check("ledger append-only source=quiz ref_id=attempt", quizLedger.data?.totalItems === 1 && quizLedger.data?.items?.[0]?.amount === 20 && quizLedger.data?.items?.[0]?.ref_id === attemptId, JSON.stringify(quizLedger.data))
+      const gNotif = await api("GET", "/api/collections/notifications/records", { token: gToken })
+      check("notif 'Poin kuis masuk' utk user", (gNotif.data?.items || []).some((n) => n.title === "Poin kuis masuk"))
+      const quizEvents = await api("GET", "/api/collections/analytics_events/records?filter=" + encodeURIComponent('name = "modul_selesai"'), { token: suToken })
+      check("event modul_selesai source=kuis tercatat (PRD §8)", (quizEvents.data?.items || []).some((ev) => ev.user === gId && ev.payload?.source === "kuis"), JSON.stringify(quizEvents.data?.items))
+
+      // anti dobel poin: lulus lagi → tetap lulus, 0 poin
+      const passAgain = await api("POST", `/api/ekoteologi/modules/${quizModuleId}/quiz`, {
+        token: gToken,
+        body: { answers: answers.map((choice, i) => ({ question_id: questionIds[i], choice })) },
+      })
+      check(
+        "anti dobel poin: lulus ulang → already_passed_before, 0 poin",
+        passAgain.status === 200 && passAgain.data?.passed === true && passAgain.data?.points_awarded === 0 &&
+          passAgain.data?.already_passed_before === true && passAgain.data?.points_total === 20,
+        JSON.stringify(passAgain.data)
+      )
+      const gAfter2 = await api("GET", `/api/collections/users/records/${gId}`, { token: gToken })
+      check("poin tidak berubah setelah lulus ulang", gAfter2.data?.points === 20)
+
+      // badge kuis terbuka otomatis (badge engine menghitung quiz_passed)
+      const quizBadge = await api("POST", "/api/collections/badges/records", {
+        token: suToken,
+        body: { code: "kuis_uji", name: "Kuis Pertama", criteria: { type: "quiz_passed", value: 1 } },
+      })
+      check("badge kuis_uji dibuat admin", quizBadge.status === 200)
+      const gBadges = await api("GET", "/api/ekoteologi/badges", { token: gToken })
+      check("badge quiz_passed diraih otomatis setelah kuis lulus", (gBadges.data || []).find((b) => b.code === "kuis_uji")?.earned === true, JSON.stringify((gBadges.data || []).filter((b) => b.earned).map((b) => b.code)))
+
+      // pelajaran: detail → complete berurutan → modul selesai (sekali)
+      const lessonDetail = await api("GET", `/api/ekoteologi/lessons/${lesson1Id}`, { token: gToken })
+      check(
+        "GET /lessons/{id}: blok paragraph/quote/tip + next_lesson_id",
+        lessonDetail.status === 200 && lessonDetail.data?.blocks?.length === 3 &&
+          lessonDetail.data?.blocks?.[1]?.type === "quote" && lessonDetail.data?.next_lesson_id === lesson2Id,
+        JSON.stringify(lessonDetail.data)
+      )
+      const complete1 = await api("POST", `/api/ekoteologi/lessons/${lesson1Id}/complete`, { token: gToken, body: {} })
+      check(
+        "complete pelajaran 1 → progres 1/2, belum selesai modul",
+        complete1.status === 200 && complete1.data?.lessons_done === 1 && complete1.data?.just_completed === false,
+        JSON.stringify(complete1.data)
+      )
+      const complete2 = await api("POST", `/api/ekoteologi/lessons/${lesson2Id}/complete`, { token: gToken, body: {} })
+      check(
+        "complete pelajaran 2 → modul selesai (transisi sekali)",
+        complete2.status === 200 && complete2.data?.lessons_done === 2 && complete2.data?.is_completed === true && complete2.data?.just_completed === true,
+        JSON.stringify(complete2.data)
+      )
+      const completeAgain = await api("POST", `/api/ekoteologi/lessons/${lesson1Id}/complete`, { token: gToken, body: {} })
+      check(
+        "complete ulang pelajaran lama tidak menurunkan/menggandakan",
+        completeAgain.data?.lessons_done === 2 && completeAgain.data?.just_completed === false,
+        JSON.stringify(completeAgain.data)
+      )
+      const lessonEvents = await api("GET", "/api/collections/analytics_events/records?filter=" + encodeURIComponent('name = "modul_selesai"'), { token: suToken })
+      const gLessonEvents = (lessonEvents.data?.items || []).filter((ev) => ev.user === gId)
+      check("event modul_selesai persis 2 utk G (kuis + pelajaran)", gLessonEvents.length === 2 && gLessonEvents.some((ev) => ev.payload?.source === "pelajaran"), JSON.stringify(gLessonEvents.map((ev) => ev.payload?.source)))
+      const listAfter = await api("GET", "/api/ekoteologi/modules", { token: gToken })
+      const cardAfter = (listAfter.data?.items || []).find((m) => m.id === quizModuleId)
+      check("kartu modul kini 100% + CTA Ulangi + ringkasan completed", cardAfter?.progress?.percent === 100 && cardAfter?.cta === "Ulangi" && listAfter.data?.summary?.completed === 1, JSON.stringify(cardAfter))
+      const lesson404 = await api("GET", "/api/ekoteologi/lessons/tidakada", { token: gToken })
+      check("pelajaran tak dikenal → 404", lesson404.status === 404)
+
+      // kuis modul tanpa kuis → 404 ramah
+      const bare = await api("POST", "/api/collections/modules/records", { token: suToken, body: { title: "Modul Tanpa Kuis", slug: "tanpa-kuis", is_published: true } })
+      const noQuiz = await api("GET", `/api/ekoteologi/modules/${bare.data?.id}/quiz`, { token: gToken })
+      check("modul tanpa kuis → 404 'belum memiliki kuis'", noQuiz.status === 404 && /kuis/.test(noQuiz.data?.message || ""))
+    }
+
+    // ── 12. konten harian: wisdom card + cron auto-publish (sprint 13) ──
+    console.log("[12] Sprint 13: konten harian — route wisdom card + cron publish")
+    {
+      const gToken = await auth("users", "gita@ekoteologi.id", "RahasiaKu123")
+      const fallback = await api("GET", "/api/ekoteologi/daily-content", { token: gToken })
+      check(
+        "GET /daily-content tanpa jadwal → fallback bank quote (selalu 200)",
+        fallback.status === 200 && fallback.data?.fallback === true && fallback.data?.type === "fallback" &&
+          !!fallback.data?.body && !!fallback.data?.source,
+        JSON.stringify(fallback.data)
+      )
+      const pad = (n) => String(n).padStart(2, "0")
+      const todayStr = (() => {
+        const d = new Date()
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      })()
+      const sched = await api("POST", "/api/collections/daily_contents/records", {
+        token: suToken,
+        body: { publish_date: `${todayStr} 00:00:00.000Z`, type: "ayat", title: "Kartu Uji", body: "Konten terjadwal admin", eco_action: "Uji aksi hari ini" },
+      })
+      check("admin membuat konten terjadwal hari ini", sched.status === 200)
+      const scheduled = await api("GET", "/api/ekoteologi/daily-content", { token: gToken })
+      check(
+        "GET /daily-content → konten terjadwal admin (fallback=false)",
+        scheduled.status === 200 && scheduled.data?.fallback === false && scheduled.data?.body === "Konten terjadwal admin" && scheduled.data?.eco_action === "Uji aksi hari ini",
+        JSON.stringify(scheduled.data)
+      )
+      const trigBusy = await api("POST", "/api/ekoteologi/cron/daily-content", { token: adminToken, body: {} })
+      check("cron publish saat sudah ada jadwal → created 0 (tak menimpa)", trigBusy.status === 200 && trigBusy.data?.created === 0, JSON.stringify(trigBusy.data))
+      await api("DELETE", `/api/collections/daily_contents/records/${sched.data?.id}`, { token: suToken })
+      const trig = await api("POST", "/api/ekoteologi/cron/daily-content", { token: adminToken, body: {} })
+      check("cron publish → konten hari ini terbit dari bank", trig.status === 200 && trig.data?.created === 1, JSON.stringify(trig.data))
+      const after = await api("GET", "/api/ekoteologi/daily-content", { token: gToken })
+      check(
+        "auto-publish: fallback=false, body = rotasi bank, eco_action terisi",
+        after.data?.fallback === false && after.data?.body === fallback.data?.body && !!after.data?.eco_action,
+        JSON.stringify(after.data)
+      )
+      const trigAgain = await api("POST", "/api/ekoteologi/cron/daily-content", { token: adminToken, body: {} })
+      check("cron publish idempoten (trigger kedua → 0)", trigAgain.data?.created === 0)
+      const trigUser = await api("POST", "/api/ekoteologi/cron/daily-content", { token: gToken, body: {} })
+      check("user biasa tidak bisa memicu publish", trigUser.status === 401 || trigUser.status === 403)
+    }
+
+    // ── 13. broadcast & pipeline push FCM (endpoint mock) ──
+    console.log("[13] Sprint 13: broadcast composer + push FCM HTTP v1 (mock) + token mati")
+    {
+      // token perangkat milik A (createRule OWN): satu hidup, satu mati
+      const tok1 = await api("POST", "/api/collections/fcm_tokens/records", { token: aToken, body: { user: aId, token: "tok-A1-hidup" } })
+      const tok2 = await api("POST", "/api/collections/fcm_tokens/records", { token: aToken, body: { user: aId, token: "DEAD-A2-mati" } })
+      check("token FCM terdaftar milik A", tok1.status === 200 && tok2.status === 200, JSON.stringify({ tok1: tok1.status, tok2: tok2.status }))
+
+      const segs = await api("GET", "/api/ekoteologi/admin/push/segments", { token: adminToken })
+      const segAll = (segs.data?.items || []).find((s) => s.segment === "all")
+      const segTok = (segs.data?.items || []).find((s) => s.segment === "bertoken")
+      check(
+        "GET /admin/push/segments: 4 segmen + rekap penerima/token",
+        segs.status === 200 && segs.data?.items?.length === 4 && segAll?.recipients >= 6 && segTok?.tokens === 2,
+        JSON.stringify(segs.data)
+      )
+      const segUser = await api("GET", "/api/ekoteologi/admin/push/segments", { token: aToken })
+      check("segmen hanya utk admin", segUser.status === 401 || segUser.status === 403)
+
+      const fcmCallsBefore = mockState.fcm.calls.length
+      const bc = await api("POST", "/api/ekoteologi/admin/push/broadcast", {
+        token: adminToken,
+        body: { title: "Pengumuman Uji Sprint 13", body: "Halo seluruh pengguna Ekoteologi!", segment: "all" },
+      })
+      check(
+        "POST /admin/push/broadcast → rekap penerima/token/terkirim",
+        bc.status === 200 && bc.data?.recipients >= 6 && bc.data?.tokens === 2 && bc.data?.sent === 1,
+        JSON.stringify(bc.data)
+      )
+      const calls = mockState.fcm.calls.slice(fcmCallsBefore)
+      check(
+        "FCM v1 mock menerima pesan dgn Bearer access token",
+        calls.length === 2 && calls.every((c) => c.auth === "Bearer mock-oauth-token") && calls.some((c) => c.token === "tok-A1-hidup") && calls.some((c) => c.token === "DEAD-A2-mati"),
+        JSON.stringify(calls)
+      )
+      check(
+        "OAuth mock: JWT RS256 diverifikasi crypto Node + klaim service account",
+        mockState.oauth.claims.length === 1 && mockState.oauth.claims[0].ok === true &&
+          mockState.oauth.claims[0].claims?.iss === "ekoteologi-test@ekoteologi-test.iam.gserviceaccount.com" &&
+          /firebase\.messaging/.test(mockState.oauth.claims[0].claims?.scope || "") &&
+          mockState.oauth.claims[0].claims?.aud?.endsWith("/oauth"),
+        JSON.stringify(mockState.oauth.claims)
+      )
+      const tokLeft = await api("GET", "/api/collections/fcm_tokens/records", { token: aToken })
+      check("token mati (410) dihapus otomatis dari fcm_tokens", tokLeft.data?.totalItems === 1 && tokLeft.data?.items?.[0]?.token === "tok-A1-hidup", JSON.stringify(tokLeft.data?.items?.map((t) => t.token)))
+      const bcRow = await api("GET", "/api/collections/notifications/records?filter=" + encodeURIComponent('title = "Pengumuman Uji Sprint 13"'), { token: aToken })
+      const bcRec = bcRow.data?.items?.[0]
+      check(
+        "baris broadcast (user kosong) + rekap push di payload",
+        bcRow.data?.totalItems === 1 && bcRec?.payload?.kind === "broadcast" && bcRec?.payload?.push?.sent === 1 && bcRec?.payload?.push?.dead === 1 && bcRec?.payload?.push?.mode === "fcm",
+        JSON.stringify(bcRec?.payload)
+      )
+      const bcAudit = await api("GET", "/api/collections/audit_logs/records?filter=" + encodeURIComponent('action = "push.broadcast"'), { token: adminToken })
+      check("broadcast ter-audit (action=push.broadcast + rekap)", bcAudit.data?.totalItems === 1 && bcAudit.data?.items?.[0]?.diff?.sent === 1, JSON.stringify(bcAudit.data?.items?.[0]?.diff))
+
+      // push event user (sumber = notifikasi in-app): klaim manual → notif → push 1 token
+      const fcmCallsBefore2 = mockState.fcm.calls.length
+      const mBaru = await api("POST", "/api/collections/missions/records", { token: suToken, body: { title: "Misi Push Uji", points: 5, verification: "manual", is_active: true } })
+      await api("POST", `/api/ekoteologi/missions/${mBaru.data?.id}/claim`, { token: aToken, body: {} })
+      const notifA = await api("GET", "/api/collections/notifications/records?sort=-created&filter=" + encodeURIComponent('title = "Poin misi masuk"'), { token: aToken })
+      const notifRec = notifA.data?.items?.[0]
+      check(
+        "notifikasi event user → push ke token miliknya (payload.push rekap)",
+        !!notifRec && notifRec?.payload?.push?.sent === 1 && notifRec?.payload?.push?.mode === "fcm",
+        JSON.stringify(notifRec?.payload)
+      )
+      const calls2 = mockState.fcm.calls.slice(fcmCallsBefore2)
+      check("FCM menerima pesan event (token tok-A1)", calls2.some((c) => c.token === "tok-A1-hidup" && /poin/i.test(c.title)), JSON.stringify(calls2))
+      check("OAuth di-cache (token dipakai ulang, tanpa tukar baru)", mockState.oauth.claims.length === 1, `hits=${mockState.oauth.claims.length}`)
+
+      // event misi baru → broadcast otomatis
+      const newMissionNotif = await api("GET", "/api/collections/notifications/records?filter=" + encodeURIComponent('title = "Misi baru!"'), { token: aToken })
+      check(
+        'event "misi baru" → broadcast otomatis (paritas Sprint 8)',
+        newMissionNotif.data?.totalItems >= 1 && newMissionNotif.data?.items?.[0]?.payload?.kind === "new_mission",
+        JSON.stringify(newMissionNotif.data?.items?.[0]?.payload)
+      )
+
+      // validasi composer
+      const badTitle = await api("POST", "/api/ekoteologi/admin/push/broadcast", { token: adminToken, body: { title: "ha", body: "isi yang cukup panjang", segment: "all" } })
+      const badSeg = await api("POST", "/api/ekoteologi/admin/push/broadcast", { token: adminToken, body: { title: "Judul Sah", body: "isi yang cukup panjang", segment: "semua" } })
+      const notAdmin = await api("POST", "/api/ekoteologi/admin/push/broadcast", { token: aToken, body: { title: "Judul Sah", body: "isi yang cukup panjang", segment: "all" } })
+      check("validasi composer: judul pendek 400, segmen asing 400, non-admin 401/403", badTitle.status === 400 && badSeg.status === 400 && (notAdmin.status === 401 || notAdmin.status === 403), JSON.stringify([badTitle.status, badSeg.status, notAdmin.status]))
+    }
+
+    // ── 14. ops: dashboard, cleanup, backup, guard read_at (sprint 13) ──
+    console.log("[14] Sprint 13: ops — dashboard agregasi, cleanup, backup, guard notifikasi")
+    {
+      const dash = await api("GET", "/api/ekoteologi/admin/dashboard", { token: adminToken })
+      check(
+        "GET /admin/dashboard: KPI pengguna/scan/verifikasi",
+        dash.status === 200 && dash.data?.users?.total >= 7 && dash.data?.scans?.total >= 7 && dash.data?.verification?.pending >= 1,
+        JSON.stringify({ u: dash.data?.users, s: dash.data?.scans, v: dash.data?.verification })
+      )
+      check(
+        "dashboard: cache hit rate 75% + token LLM mock 0",
+        dash.data?.cache?.hit === 6 && dash.data?.cache?.miss === 2 && dash.data?.cache?.hit_rate === 75 && dash.data?.llm?.tokens_month === 0,
+        JSON.stringify(dash.data?.cache)
+      )
+      check(
+        "dashboard chart: 14 hari + kategori terurut dgn persentase",
+        dash.data?.charts?.daily?.length === 14 && (dash.data?.charts?.daily?.at(-1)?.count || 0) >= 7 &&
+          (dash.data?.charts?.categories?.length || 0) >= 1 && dash.data?.charts?.categories?.[0]?.percentage > 0,
+        JSON.stringify(dash.data?.charts)
+      )
+      const dashUser = await api("GET", "/api/ekoteologi/admin/dashboard", { token: aToken })
+      check("dashboard hanya utk staff (user biasa ditolak)", dashUser.status === 401 || dashUser.status === 403)
+
+      // cleanup kunci kedaluwarsa
+      const pad = (n) => String(n).padStart(2, "0")
+      const todayStr = (() => {
+        const d = new Date()
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      })()
+      const yesterdayMs = Date.now() - 16 * 60 * 1000
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: "sr:legacyuser:2026-01-01", value: { sent_at: "lama" } } })
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: `scan_quota:${aId}:2020-01-05`, value: 3 } })
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: "sd:legacyuser:2019-12-31", value: "abc" } })
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: "login_guard:stale@x.id", value: { start: yesterdayMs, count: 3 } } })
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: `sr:${aId}:${todayStr}`, value: { sent_at: "hari ini" } } })
+      await api("POST", "/api/collections/app_settings/records", { token: suToken, body: { key: "login_guard:fresh@x.id", value: { start: Date.now(), count: 1 } } })
+      await api("POST", "/api/collections/llm_cache/records", { token: suToken, body: { key: "scan:expired", value: { x: 1 }, expires: "2020-01-01 00:00:00.000Z" } })
+      await api("POST", "/api/collections/llm_cache/records", { token: suToken, body: { key: "scan:valid", value: { x: 2 }, expires: "2099-01-01 00:00:00.000Z" } })
+      const clean = await api("POST", "/api/ekoteologi/cron/cleanup", { token: adminToken, body: {} })
+      check(
+        "cron cleanup: kunci kedaluwarsa + llm_cache kadaluarsa dibuang",
+        clean.status === 200 && clean.data?.settings_removed >= 4 && clean.data?.cache_removed >= 1,
+        JSON.stringify(clean.data)
+      )
+      const checkKey = async (key) => {
+        const r = await api("GET", "/api/collections/app_settings/records?filter=" + encodeURIComponent(`key = "${key}"`), { token: suToken })
+        return r.data?.totalItems || 0
+      }
+      check("kunci sr/scan_quota/sd/login_guard kedaluwarsa hilang", (await checkKey("sr:legacyuser:2026-01-01")) === 0 && (await checkKey(`scan_quota:${aId}:2020-01-05`)) === 0 && (await checkKey("sd:legacyuser:2019-12-31")) === 0 && (await checkKey("login_guard:stale@x.id")) === 0)
+      check("kunci segar tetap (sr hari ini, guard dalam jendela, cache OAuth FCM)", (await checkKey(`sr:${aId}:${todayStr}`)) === 1 && (await checkKey("login_guard:fresh@x.id")) === 1 && (await checkKey("fcm:tk:ekoteologi-test")) === 1)
+      const validCache = await api("GET", "/api/collections/llm_cache/records?filter=" + encodeURIComponent('key = "scan:valid"'), { token: suToken })
+      check("llm_cache masih sah tidak ikut terhapus", validCache.data?.totalItems === 1)
+      const cleanUser = await api("POST", "/api/ekoteologi/cron/cleanup", { token: aToken, body: {} })
+      check("cleanup hanya utk admin", cleanUser.status === 401 || cleanUser.status === 403)
+
+      // backup: jadwal bawaan PB (migrasi) + route manual
+      const settings = await api("GET", "/api/settings", { token: suToken })
+      check(
+        "backup otomatis bawaan PB terjadwal dari migrasi (BACKUP_CRON default)",
+        settings.data?.backups?.cron === "0 2 * * *" && settings.data?.backups?.cronMaxKeep === 7,
+        JSON.stringify(settings.data?.backups)
+      )
+      const backup = await api("POST", "/api/ekoteologi/cron/backup", { token: adminToken, body: {} })
+      check("route backup manual → file .zip dibuat", backup.status === 200 && /^manual_.*\.zip$/.test(backup.data?.file || ""), JSON.stringify(backup.data))
+      const backupsList = await api("GET", "/api/backups", { token: suToken })
+      check("cadangan terbaca di /api/backups (superuser)", (backupsList.data || []).some((b) => b.key === backup.data?.file), JSON.stringify(backupsList.data))
+      const backupUser = await api("POST", "/api/ekoteologi/cron/backup", { token: aToken, body: {} })
+      check("backup hanya utk admin", backupUser.status === 401 || backupUser.status === 403)
+
+      // guard update notifications: hanya read_at
+      const ownNotif = await api("GET", "/api/collections/notifications/records?filter=" + encodeURIComponent('title = "Poin misi masuk"'), { token: aToken })
+      const notifId = ownNotif.data?.items?.[0]?.id
+      const markRead = await api("PATCH", `/api/collections/notifications/records/${notifId}`, { token: aToken, body: { read_at: new Date().toISOString() } })
+      check("pemilik menandai notifikasi dibaca (read_at)", markRead.status === 200 && !!markRead.data?.read_at)
+      const deface = await api("PATCH", `/api/collections/notifications/records/${notifId}`, { token: aToken, body: { title: "judul palsu" } })
+      check("pemilik TIDAK bisa mengubah judul/isi notifikasi (403)", deface.status === 403, `status ${deface.status}`)
+    }
+
+    // ── 15. instance fault-injection: rollback review atomik + Sentry + fallback log ──
+    console.log("[15] Sprint 13: rollback review full-atomik (ledger dimatikan) + Sentry + fallback push log")
+    {
+      // salinan hook + satu file fault: ledger create selalu gagal.
+      const faultDir = mkdtempSync(path.join(os.tmpdir(), "pb-fault-"))
+      const faultData = path.join(faultDir, "pb_data")
+      const faultHooks = path.join(faultDir, "pb_hooks")
+      const fsProm = await import("node:fs")
+      fsProm.cpSync(HOOKS, faultHooks, { recursive: true })
+      writeFileSync(
+        path.join(faultHooks, "zz_fault.pb.js"),
+        'onRecordCreate((e) => { throw new BadRequestError("fault: ledger dimatikan utk uji rollback") }, "point_transactions")\n' +
+        'routerAdd("GET", "/api/ekoteologi/fault-500", (e) => { throw new Error("fault: error uji 500 untuk Sentry") })\n'
+      )
+      const faultPort = await freePort(18600)
+      const up2 = spawnSync(PB_BIN, ["superuser", "upsert", SUPERUSER_EMAIL, SUPERUSER_PASSWORD, "--dir", faultData], { stdio: "ignore" })
+      if (up2.status !== 0) throw new Error("superuser upsert (instance fault) gagal")
+      let faultSrv = spawn(
+        PB_BIN,
+        ["serve", "--dir", faultData, "--migrationsDir", MIGRATIONS, "--hooksDir", faultHooks, "--http", `127.0.0.1:${faultPort}`],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          // PUSH_MODE=fcm TANPA FCM_PROJECT_ID → fallback log; SENTRY_DSN → mock store.
+          env: { ...process.env, PUSH_MODE: "fcm", SENTRY_DSN: `http://testkey@127.0.0.1:${MOCK_PORT}/1` },
+        }
+      )
+      const fBase = `http://127.0.0.1:${faultPort}`
+      faultSrv.stderr.on("data", (d) => process.env.PB_TEST_VERBOSE && process.stderr.write("[fault] " + d))
+      faultSrv.stdout.on("data", (d) => process.env.PB_TEST_VERBOSE && process.stdout.write("[fault] " + d))
+      const fauth = async (collection, identity, password) => {
+        const res = await fetch(`${fBase}/api/collections/${collection}/auth-with-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identity, password }),
+        })
+        const data = await res.json().catch(() => null)
+        if (res.status !== 200) throw new Error(`auth ${collection} (instance fault) gagal (${res.status})`)
+        return data.token
+      }
+      const fapi = async (method, urlPath, { token, body } = {}) => {
+        const res = await fetch(`${fBase}${urlPath}`, {
+          method,
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: token } : {}) },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        })
+        let data = null
+        try {
+          data = await res.json()
+        } catch {}
+        return { status: res.status, data }
+      }
+      let fReady = false
+      for (let i = 0; i < 60; i++) {
+        try {
+          const { status } = await fapi("GET", "/api/health")
+          if (status === 200) {
+            fReady = true
+            break
+          }
+        } catch {}
+        await new Promise((r) => setTimeout(r, 500))
+      }
+      check("instance fault-injection menyala", fReady)
+      if (fReady) {
+        const suT = await fauth("_superusers", SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
+        const okH = await fapi("POST", "/api/collections/users/records", { body: { email: "hana@ekoteologi.id", password: "RahasiaKu123", passwordConfirm: "RahasiaKu123", full_name: "Hana Uji" } })
+        check("registrasi user H (instance fault)", okH.status === 200, JSON.stringify(okH.data))
+        const hId = okH.data?.id
+        const hToken = await fauth("users", "hana@ekoteologi.id", "RahasiaKu123")
+        const okAdmin = await fapi("POST", "/api/collections/users/records", { body: { email: "boss@ekoteologi.id", password: "RahasiaKu123", passwordConfirm: "RahasiaKu123", full_name: "Boss Uji" } })
+        await fapi("PATCH", `/api/collections/users/records/${okAdmin.data?.id}`, { token: suT, body: { role: "admin" } })
+        const adminT = await fauth("users", "boss@ekoteologi.id", "RahasiaKu123")
+        const mFault = await fapi("POST", "/api/collections/missions/records", { token: suT, body: { title: "Misi Fault", points: 9, verification: "photo", is_active: true } })
+        const PNG_1PX = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+          "base64"
+        )
+        const claimFault = async () => {
+          const form = new FormData()
+          form.append("consent", "1")
+          form.append("proof", new Blob([PNG_1PX], { type: "image/png" }), "bukti.png")
+          return fetch(`${fBase}/api/ekoteologi/missions/${mFault.data?.id}/claim`, {
+            method: "POST",
+            headers: { Authorization: hToken },
+            body: form,
+          }).then(async (r) => ({ status: r.status, data: await r.json().catch(() => null) }))
+        }
+        const claim1 = await claimFault()
+        check("fault: klaim photo → submitted", claim1.status === 200 && claim1.data?.claim?.status === "submitted", JSON.stringify(claim1.data))
+        const approve = await fapi("PATCH", `/api/collections/user_missions/records/${claim1.data?.claim?.id}`, { token: adminT, body: { status: "approved" } })
+        check("fault: approve gagal 500 (ledger error tertangkap jadi pesan ramah)", approve.status === 500, `status ${approve.status} ${JSON.stringify(approve.data)}`)
+        const claimAfter = await fapi("GET", `/api/collections/user_missions/records/${claim1.data?.claim?.id}`, { token: suT })
+        check(
+          "ROLLBACK atomik: klaim tetap submitted, poin & reviewer kosong",
+          claimAfter.data?.status === "submitted" && (claimAfter.data?.points_awarded || 0) === 0 && !claimAfter.data?.reviewed_at,
+          JSON.stringify(claimAfter.data)
+        )
+        const hAfter = await fapi("GET", `/api/collections/users/records/${hId}`, { token: hToken })
+        check("ROLLBACK: users.points tidak berubah (0)", (hAfter.data?.points || 0) === 0)
+        const hNotif = await fapi("GET", "/api/collections/notifications/records", { token: hToken })
+        check("ROLLBACK: tidak ada notif 'Misi disetujui!' hantu", !(hNotif.data?.items || []).some((n) => n.title === "Misi disetujui!"))
+        const ledgerGhost = await fapi("GET", "/api/collections/point_transactions/records", { token: suT })
+        check("ROLLBACK: tidak ada baris ledger hantu", (ledgerGhost.data?.totalItems || 0) === 0)
+        const faultRoute = await fetch(`${fBase}/api/ekoteologi/fault-500`)
+        check("route fault (error mentah) → ditanggi PB (400) tapi lolos middleware", faultRoute.status === 400, `status ${faultRoute.status}`)
+        await new Promise((r) => setTimeout(r, 900))
+        check(
+          "error 500 route terkirim ke Sentry mock (middleware error hook)",
+          mockState.sentry.length >= 1 && mockState.sentry.some((ev) => /fault: error uji 500/.test(ev?.message || "")),
+          JSON.stringify(mockState.sentry)
+        )
+        // fallback push log: reject (tanpa ledger) → notif + push mode log
+        const reject = await fapi("PATCH", `/api/collections/user_missions/records/${claim1.data?.claim?.id}`, { token: adminT, body: { status: "rejected", review_note: "Foto kurang jelas" } })
+        check("fault: reject tetap jalan (tanpa ledger)", reject.status === 200 && reject.data?.status === "rejected", JSON.stringify(reject.data))
+        const hNotif2 = await fapi("GET", "/api/collections/notifications/records", { token: hToken })
+        const rejectNotif = (hNotif2.data?.items || []).find((n) => n.title === "Misi perlu diperbaiki")
+        check(
+          "PUSH_MODE=fcm tanpa FCM_PROJECT_ID → fallback mode=log (wajib teruji)",
+          !!rejectNotif && rejectNotif?.payload?.push?.mode === "log" && rejectNotif?.payload?.push?.recipients === 1,
+          JSON.stringify(rejectNotif?.payload)
+        )
+      }
+      faultSrv.kill("SIGTERM")
+      rmSync(faultDir, { recursive: true, force: true })
     }
 
     console.log(`\nHasil: ${passed} PASS, ${failed} FAIL`)

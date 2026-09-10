@@ -4,7 +4,7 @@
  * (JSON) + bank soal kuis. Sumber: koleksi PocketBase `modules`, `lessons`,
  * `quizzes`, `quiz_questions` (rules admin+editor). Kuis per modul dibuat
  * otomatis saat soal pertama ditambahkan (paritas server lama). Penilaian &
- * poin kuis di sisi hook menyusul Sprint 13.
+ * poin kuis kini dinilai server-side (hook sprint 13).
  */
 import { computed, onMounted, ref } from 'vue'
 

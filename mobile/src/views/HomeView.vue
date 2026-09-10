@@ -11,7 +11,7 @@
  * disembunyikan bila datanya gagal dimuat — satu widget gagal tidak
  * memblokir beranda; offline ditangani OfflineBar global (App.vue).
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ImpactCard from '@/components/home/ImpactCard.vue'
@@ -20,7 +20,7 @@ import WisdomCard from '@/components/home/WisdomCard.vue'
 import BottomNav from '@/components/layout/BottomNav.vue'
 import { ApiError, apiUrl } from '@/api/client'
 import { fetchDailyContent } from '@/services/dailyContent'
-import { fetchNotifications } from '@/services/notifications'
+import { fetchNotifications, subscribeNotifications } from '@/services/notifications'
 import { registerPush } from '@/services/push'
 import { fetchMissions } from '@/services/missions'
 import { fetchStreak } from '@/services/streak'
@@ -76,6 +76,8 @@ const miniMissions = computed(() => pickMiniMissions(missions.value))
 /** Notif hasil verifikasi belum dibaca (badge kartu menu Misi — Sprint 5). */
 const unreadMissions = ref(0)
 const scanTotal = ref<number | null>(null)
+/** Realtime SSE (Sprint 13): notifikasi baru tampil tanpa polling. */
+let stopRealtime: (() => Promise<void>) | null = null
 
 function shareFallback(text: string) {
   void navigator.clipboard?.writeText(text).then(
@@ -131,6 +133,28 @@ onMounted(async () => {
   } catch {
     unreadMissions.value = 0
   }
+
+  // Realtime (Sprint 13): langganan notifikasi via SSE — badge misi & pill
+  // poin terbarui seketika; gagal koneksi dibiarkan senyap (polling manual
+  // tetap jalan saat beranda dimuat ulang).
+  try {
+    stopRealtime = await subscribeNotifications(
+      (event) => {
+        if (event.action === 'create') {
+          if (event.item.type === 'mission' && !event.item.read_at) unreadMissions.value += 1
+          if (event.item.title) toast.show(event.item.title)
+        }
+      },
+      () => {},
+    )
+  } catch {
+    stopRealtime = null
+  }
+})
+
+onUnmounted(() => {
+  void stopRealtime?.()
+  stopRealtime = null
 })
 </script>
 
