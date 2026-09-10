@@ -198,7 +198,8 @@ dan kredensial FCM (Sprint 13).
 
 | Run | Commit | Hasil |
 |---|---|---|
-| (diisi setelah push — lihat commit `docs(sprint)` berikutnya) | `4574454` (batch sprint 12) | — |
+| #30 | `4574454` (batch sprint 12) | dibatalkan otomatis oleh concurrency group saat commit docs menyusul beberapa menit kemudian (pola yang sama dgn sprint 9–11) |
+| #31 | `8422c67` (laporan sprint 12) | ✅ 4/4 job hijau (Backend: lint JS → test integrasi **171 asersi** → E2E SDK **35 asersi** → smoke; Admin — lint/test/build; Mobile web — lint/build; Mobile APK) |
 
 ## 9. Ke Sprint 13
 
