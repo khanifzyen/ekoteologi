@@ -12,9 +12,12 @@ coverage/
 
 # ── PocketBase (sprint 9) ──
 # binary versi pin diunduh via `make pb-install`; data lokal via pb-serve.
+# CHANGELOG.md & LICENSE.md ikut paket rilis (regenerasi `make pb-install`).
 pocketbase/pocketbase
 pocketbase/pb_data/
 pocketbase/*.zip
+pocketbase/CHANGELOG.md
+pocketbase/LICENSE.md
 
 # ── Android (Capacitor) ──
 mobile/android/.gradle/
