@@ -1,6 +1,7 @@
 name: CI
 
-# Sprint 0 — Fondasi Teknis: lint, test, build untuk api/admin/mobile + APK debug.
+# Sprint 9 (migrasi PocketBase): job backend (lint JS + instance uji PocketBase + smoke)
+# menggantikan job api (FastAPI). Job admin/mobile/android-apk tidak berubah.
 on:
   push:
     branches: [master]
@@ -12,52 +13,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  api:
-    name: API — lint & test
+  backend:
+    name: Backend — PocketBase lint, smoke & rules
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: ekoteologi
-          POSTGRES_PASSWORD: ekoteologi
-          POSTGRES_DB: ekoteologi_test
-        ports:
-          - 55432:5432
-        options: >-
-          --health-cmd "pg_isready -U ekoteologi"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 56379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    defaults:
-      run:
-        working-directory: api
     env:
-      TEST_DATABASE_URL: postgresql+asyncpg://ekoteologi:ekoteologi@localhost:55432/ekoteologi_test
-      REDIS_URL: redis://localhost:56379/0
+      PB_VERSION: 0.40.3
     steps:
       - uses: actions/checkout@v5
-      - name: Pasang uv
-        uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v6
         with:
-          python-version: 3.12
-      - name: Sinkronisasi dependensi
-        run: uv sync --locked
-      - name: Lint (ruff check + format)
+          node-version: 24
+      - name: Sinkron versi pin (Makefile vs workflow)
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
-      - name: Test (pytest + coverage ≥70% — DoD §1.4)
-        run: uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
+          grep -q "PB_VERSION := $PB_VERSION" Makefile
+          grep -q "ARG PB_VERSION=$PB_VERSION" pocketbase/Dockerfile
+          echo "pin OK: v$PB_VERSION"
+      - name: Lint JS (hooks, migrations, scripts)
+        run: |
+          for f in pocketbase/pb_hooks/*.pb.js pocketbase/pb_migrations/*.js pocketbase/scripts/*.mjs; do
+            node --check "$f"
+          done
+          echo "lint JS OK"
+      - name: Unduh PocketBase v$PB_VERSION (versi pin)
+        run: |
+          curl -sL -o /tmp/pb.zip "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip"
+          unzip -o /tmp/pb.zip -d pocketbase
+          chmod +x pocketbase/pocketbase
+          ./pocketbase/pocketbase --version
+      - name: Test integrasi (migrasi, seed, API rules — instance uji sekali pakai)
+        run: node pocketbase/scripts/test.mjs
+      - name: Smoke health + ping
+        run: node pocketbase/scripts/smoke.mjs
 
   admin:
     name: Admin — lint, test & build

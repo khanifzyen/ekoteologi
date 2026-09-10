@@ -10,18 +10,11 @@ node_modules/
 dist/
 coverage/
 
-# ── Python ──
-__pycache__/
-*.py[cod]
-.venv/
-.pytest_cache/
-.ruff_cache/
-.coverage
-.coverage.*
-*.egg-info/
-
-# Upload lokal API (avatar) — api/app/api/profile.py menulis ke UPLOAD_DIR
-api/var/
+# ── PocketBase (sprint 9) ──
+# binary versi pin diunduh via `make pb-install`; data lokal via pb-serve.
+pocketbase/pocketbase
+pocketbase/pb_data/
+pocketbase/*.zip
 
 # ── Android (Capacitor) ──
 mobile/android/.gradle/

@@ -47,7 +47,7 @@ Salin `.env.example` → `.env` bila perlu override:
 
 | Var | Default | Keterangan |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8100` | Base URL API. Saat uji di perangkat via Wi-Fi, isi IP LAN mesin dev, mis. `http://192.168.1.10:8100` |
+| `VITE_API_URL` | `http://localhost:8100` | Base URL API (backend PocketBase sejak Sprint 9; swap SDK penuh di Sprint 10). Saat uji di perangkat via Wi-Fi, isi IP LAN mesin dev, mis. `http://192.168.1.10:8100` |
 | `VITE_GOOGLE_CLIENT_ID` | kosong | Web Client ID Google. Kosong → tombol Google memberi pesan bahwa fitur belum aktif |
 
 Alur: splash → onboarding 3 slide (sekali, ditandai `ekoteologi_onboarded` di

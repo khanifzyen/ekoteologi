@@ -1,33 +1,27 @@
 # Perintah harian monorepo Ekoteologi AR (lihat README.md).
-.PHONY: help db-up db-down api-install api-lint api-test api-migrate api-seed api-run \
+# Backend = PocketBase v0.40.3 (pin — keputusan M1). Ubah PB_VERSION di sini,
+# di pocketbase/Dockerfile, dan .github/workflows/ci.yml secara bersamaan.
+PB_VERSION := 0.40.3
+PB_ARCH := $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+
+.PHONY: help pb-install pb-serve pb-superuser pb-test pb-smoke \
         admin-install admin-dev admin-build mobile-install mobile-dev mobile-build apk
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-16s %s\n", $$1, $$2}'
 
-# ── Infrastruktur ──
-db-up: ## Nyalakan Postgres + Redis (docker compose)
-	docker compose up -d
-db-down: ## Matikan layanan lokal
-	docker compose down
-
-# ── API (FastAPI) ──
-api-install: ## Sinkronisasi dependensi API (uv)
-	cd api && uv sync
-api-lint: ## Lint + cek format API
-	cd api && uv run ruff check . && uv run ruff format --check .
-api-test: ## Jalankan test API (butuh db-up)
-	cd api && uv run pytest
-api-cov: ## Test API + coverage (gate ≥70% — DoD §1.4)
-	cd api && uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
-api-migrate: ## Terapkan migrasi Alembic
-	cd api && uv run alembic upgrade head
-api-seed: ## Seed data awal (kategori sampah, level, badge) — idempoten
-	cd api && uv run python -m scripts.seed
-api-smoke: ## Smoke E2E lintas alur kritis (butuh db-up; DB ekoteologi_smoke)
-	cd api && uv run python -m scripts.smoke
-api-run: ## Jalankan API lokal (uvicorn, auto-reload)
-	cd api && uv run uvicorn app.main:app --reload --port 8000
+# ── Backend (PocketBase) ──
+pb-install: ## Unduh binary PocketBase v$(PB_VERSION) ke pocketbase/
+	curl -sL -o /tmp/pb.zip "https://github.com/pocketbase/pocketbase/releases/download/v$(PB_VERSION)/pocketbase_$(PB_VERSION)_linux_$(PB_ARCH).zip" \
+		&& unzip -o -q /tmp/pb.zip -d pocketbase && chmod +x pocketbase/pocketbase && rm /tmp/pb.zip
+pb-serve: ## Serve PocketBase lokal (http://127.0.0.1:8090, dashboard /_/)
+	cd pocketbase && ./pocketbase serve
+pb-superuser: ## Buat/perbarui superuser dari env PB_SUPERUSER_* (default admin@ekoteologi.id/ekoteologi123)
+	cd pocketbase && ./pocketbase superuser upsert "$${PB_SUPERUSER_EMAIL:-admin@ekoteologi.id}" "$${PB_SUPERUSER_PASSWORD:-ekoteologi123}"
+pb-test: ## Verifikasi skema + seed + rules (instance uji sekali pakai; butuh pb-install)
+	node pocketbase/scripts/test.mjs
+pb-smoke: ## Smoke: boot instance uji + cek /api/health & /api/ekoteologi/ping (butuh pb-install)
+	node pocketbase/scripts/smoke.mjs
 
 # ── Admin (Vue) ──
 admin-install:

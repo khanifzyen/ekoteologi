@@ -143,7 +143,7 @@ Salin `.env.example` → `.env`:
 
 | Var | Default | Keterangan |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8100` | Base URL API FastAPI |
+| `VITE_API_URL` | `http://localhost:8100` | Base URL API (backend PocketBase sejak Sprint 9; swap SDK penuh di Sprint 10) |
 
 ## Struktur
 

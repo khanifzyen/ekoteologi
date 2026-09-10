@@ -1,37 +1,24 @@
-# Layanan infrastruktur lokal (Sprint 0 — implementation-plan §4).
-# Jalankan: docker compose up -d
-# API & admin dijalankan langsung di host (uv / npm) untuk hot-reload.
+# Layanan infrastruktur lokal (Sprint 9 — backend PocketBase).
+# Jalankan: docker compose up -d   → PocketBase di http://localhost:56180 (dashboard /_/)
 #
-# Catatan port host: 5432/6379 dipetakan ke 55432/56379 agar tidak
-# bentrok dgn Postgres/Redis yang sudah berjalan di mesin dev ini.
+# Admin & mobile tetap dijalankan langsung di host (npm) untuk hot-reload.
+# Port host 56180 sengaja menghindari 8090 yang sering terpakai; ubah di bawah bila perlu.
+#
+# Superuser dibuat otomatis saat container start dari env berikut (ganti di produksi!).
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: ekoteologi-db
+  pocketbase:
+    build: ./pocketbase
+    image: ekoteologi-pocketbase:0.40.3
+    container_name: ekoteologi-pocketbase
     environment:
-      POSTGRES_USER: ekoteologi
-      POSTGRES_PASSWORD: ekoteologi
-      POSTGRES_DB: ekoteologi
+      PB_SUPERUSER_EMAIL: admin@ekoteologi.id
+      PB_SUPERUSER_PASSWORD: ekoteologi123
+      EKO_APP_VERSION: 0.1.0-sprint9
     ports:
-      - "55432:5432"
+      - "56180:8090"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ekoteologi -d ekoteologi"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: ekoteologi-redis
-    ports:
-      - "56379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      - pb_data:/pb/pb_data
+    restart: unless-stopped
 
 volumes:
-  pgdata:
+  pb_data:

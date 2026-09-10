@@ -1,53 +1,56 @@
 # Ekoteologi AR — Monorepo
 
 MVP Ekoteologi AR: aplikasi mobile (Android) scan sampah berbasis AI + panel admin.
-Rencana eksekusi: [`docs/implementation-plan.md`](docs/implementation-plan.md) (Scrum, 9 sprint).
+Rencana eksekusi: [`docs/implementation-plan.md`](docs/implementation-plan.md) —
+Sprint 0–8 (MVP) dieksekusi dengan FastAPI (riwayat: tag git `fastapi-archive`);
+sejak **Sprint 9** backend = **PocketBase** (migrasi Sprint 9–13).
 Sumber desain: [`docs/DESIGN.md`](docs/DESIGN.md) + mockup `docs/desain/`.
 
 ## Struktur
 
 | Folder | Isi | Stack |
 |---|---|---|
-| `api/` | Backend REST + LLM adapter (Sprint 2+) | FastAPI, SQLAlchemy 2 (async), PostgreSQL, Redis, Alembic |
+| `pocketbase/` | Backend: koleksi, rules, hooks JSVM, migrasi skema + seed | PocketBase v0.40.3 (pin), `pb_migrations` + `pb_hooks` |
 | `admin/` | Panel admin | Vue 3 + Vite + TS, Pinia, Vue Router |
 | `mobile/` | User app (Android) | Vue 3 + Vite + TS, Capacitor |
 | `docs/` | PRD, design system, mockup D0–D4, rencana sprint | — |
 
 ## Prasyarat
 
-- Node ≥ 24, Python ≥ 3.12 + [uv](https://docs.astral.sh/uv/), Docker
+- Node ≥ 24, curl + unzip (untuk `make pb-install`), Docker (opsional — atau binary langsung)
 - Untuk build APK: Android SDK (platform 35/36) + JDK 21 (lihat `mobile/README.md`)
 
 ## Mulai cepat
 
 ```bash
-docker compose up -d        # Postgres (host 55432) + Redis (host 56379)
+make pb-install && make pb-superuser   # binary + superuser dari env PB_SUPERUSER_*
+make pb-serve                          # backend di http://127.0.0.1:8090 (dashboard /_/)
+make pb-test                           # verifikasi skema + seed + rules
 
-make api-install && make api-migrate    # dependensi + skema DB
-make api-run                            # API di http://localhost:8100/docs
+# opsional via Docker:
+docker compose up -d                   # PocketBase di http://localhost:56180
 
-make admin-install && make admin-dev    # admin di http://localhost:5174
-make mobile-install && make mobile-dev  # web mobile di http://localhost:5173
+make admin-install && make admin-dev   # admin di http://localhost:5174
+make mobile-install && make mobile-dev # web mobile di http://localhost:5173
 ```
 
-User admin awal: `cd api && uv run python -m scripts.create_admin` (kredensial via env
-`ADMIN_EMAIL`/`ADMIN_PASSWORD`, default `admin@ekoteologi.id` / `ekoteologi123`).
-
-> Port 5432/6379/8000 sengaja dihindari di compose lokal karena sering terpakai
-> layanan lain di mesin dev; pemetaan bisa diubah di `docker-compose.yml`.
+> Admin & mobile belum beralih ke SDK PocketBase — itu Sprint 10 (implementation-plan §5).
+> Kontrak backend: [`pocketbase/README.md`](pocketbase/README.md).
 
 ## Konvensi penting
 
 - **Desain**: semua warna/jarak/ukuran dari `src/styles/tokens.css` (hasil salinan
   `docs/desain/tokens.css` — satu sumber di docs; perubahan token disalin ke kedua app dan
   dicatat di PR). Tanpa emoji sebagai ikon — FontAwesome 6.
-- **Config**: via environment saja (`.env.example` di setiap app). API key LLM tidak pernah
-  hardcode dan app tidak pernah memanggil LLM langsung (selalu via API).
+- **Config**: via environment saja (`.env.example` per app). Key LLM tidak pernah hardcode
+  dan app tidak pernah memanggil LLM langsung (selalu via backend — hook scan, Sprint 11).
 - **Poin** = ledger append-only (`point_transactions`); `users.points` hanya cache.
-- **CI** (`.github/workflows/ci.yml`): lint + test API (Postgres/Redis service), lint + build
-  admin & mobile, dan build APK debug sebagai artefak.
+- **Versi PocketBase di-pin** (pre-1.0): `Makefile`, `pocketbase/Dockerfile`,
+  `.github/workflows/ci.yml` diubah bersamaan; upgrade terjadwal + `make pb-test`.
+- **CI** (`.github/workflows/ci.yml`): job `backend` (lint JS hooks/migrations + instance
+  uji PocketBase + smoke), lint + build admin & mobile, dan build APK debug sebagai artefak.
 
 ## Perintah harian
 
 Lihat `make help` (daftar target di `Makefile`) dan README masing-masing app
-(`api/README.md`, `admin/README.md`, `mobile/README.md`).
+(`pocketbase/README.md`, `admin/README.md`, `mobile/README.md`).
