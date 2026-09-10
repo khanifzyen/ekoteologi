@@ -188,7 +188,7 @@ perangkat asli (Sprint 13 QA).
 
 | Run | Commit | Hasil |
 |---|---|---|
-| — | *(diisi setelah push — lihat commit docs berikutnya bila ada koreksi)* | |
+| #28 | `739c69a` (batch sprint 11) | ✅ 4/4 job hijau (Backend: lint JS → test integrasi 98 asersi → E2E SDK 26 asersi → smoke; Admin; Mobile web; Mobile APK) |
 
 ## 9. Ke Sprint 12
 
