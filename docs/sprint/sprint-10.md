@@ -197,7 +197,14 @@ terbuka (tidak baru): kredensial Google OAuth (butuh OAuth Client di Google
 Cloud Console + redirect URI terdaftar — panduan di `pocketbase/.env.example`)
 dan akses 9Router di staging untuk Sprint 11.
 
-## 8. Ke Sprint 11
+## 8. Hasil Run CI
+
+| Run | Commit | Hasil |
+|---|---|---|
+| #25 | `3aa5171` (batch sprint 10) | ❌ job `backend` — step "E2E alur klien SDK" gagal: job backend tidak pernah meng-install node_modules, sehingga SDK `pocketbase` tidak ditemukan oleh `e2e-sdk.mjs`. Job admin/mobile/android-apk hijau. |
+| #26 | `0666f9c` (fix) | ✅ 4/4 job hijau (backend: lint JS → 65 asersi → `npm ci` admin → E2E SDK 19 asersi → smoke; admin; mobile; android-apk) — fix: step `npm ci` di job backend + resolusi SDK dicoba dari admin/mobile/node_modules |
+
+## 9. Ke Sprint 11
 
 Klien sudah penuh di atas SDK; backend tinggal menambah **route kustom scan**
 (`pb_hooks` + 9Router mock/live) — klien mobile hanya perlu mengganti satu
