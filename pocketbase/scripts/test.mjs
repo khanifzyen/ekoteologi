@@ -158,8 +158,9 @@ async function main() {
 
     // ── 2. skema ter-port ──
     console.log("[2] Port skema (koleksi & relasi)")
-    const suToken = await auth("_superusers", SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
+    let suToken
     {
+      suToken = await auth("_superusers", SUPERUSER_EMAIL, SUPERUSER_PASSWORD)
       const { status, data } = await api("GET", "/api/collections?perPage=200", { token: suToken })
       check("superuser bisa list koleksi", status === 200)
       const names = new Set((data?.items || []).map((c) => c.name))
@@ -192,7 +193,7 @@ async function main() {
 
     // ── 4. rules: default deny, ownership, role, anti dobel ──
     console.log("[4] API rules")
-    let adminToken, aToken, bToken, aId, bId, missionId
+    let adminToken, aToken, bToken, aId, bId, missionId, ownScanId = ""
     {
       // default deny: koleksi terkunci menolak anonim
       const locked = await api("POST", "/api/collections/point_transactions/records", { body: { user: "x", amount: 1, source: "scan" } })
@@ -227,6 +228,7 @@ async function main() {
       check("anonim tidak bisa create scans", anonScan.status >= 400)
       const ownScan = await api("POST", "/api/collections/scans/records", { token: aToken, body: { user: aId, item_name: "botol plastik" } })
       check("user create scans miliknya → 200", ownScan.status === 200, JSON.stringify(ownScan.data))
+      ownScanId = ownScan.data?.id
       const foreign = await api("POST", "/api/collections/scans/records", { token: aToken, body: { user: bId, item_name: "bukan milikmu" } })
       check("create scans atas nama user lain ditolak", foreign.status >= 400)
       const listA = await api("GET", "/api/collections/scans/records", { token: aToken })
@@ -313,6 +315,79 @@ async function main() {
       check("admin (role) membaca audit_logs", auditList.status === 200)
       const auditA = await api("GET", "/api/collections/audit_logs/records", { token: aToken })
       check("user biasa ditolak baca audit_logs", auditA.status >= 400 || auditA.data?.totalItems === 0)
+    }
+
+    // ── 5. settings bootstrap: rate limit (sprint 10) ──
+    console.log("[5] Rate limit settings (pengganti middleware Redis)")
+    {
+      const { status, data } = await api("GET", "/api/settings", { token: suToken })
+      check("superuser membaca settings", status === 200)
+      check("rate limiter aktif", data?.rateLimits?.enabled === true)
+      const rules = data?.rateLimits?.rules || []
+      const find = (label) => rules.find((r) => r.label === label)
+      const login = find("users:authWithPassword")
+      check("rule users:authWithPassword 30/900 dtk/IP", !!login && login.maxRequests === 30 && login.duration === 900, JSON.stringify(login))
+      const refresh = find("users:authRefresh")
+      check("rule users:authRefresh 60/mnt/IP", !!refresh && refresh.maxRequests === 60 && refresh.duration === 60)
+      const create = find("users:create")
+      check("rule users:create 20/jam/IP", !!create && create.maxRequests === 20 && create.duration === 3600)
+      check("pelindung global /api/ ada", !!find("/api/"))
+    }
+
+    // ── 6. audit log (sprint 10) ──
+    console.log("[6] Audit log (pengganti middleware audit)")
+    {
+      const list = await api("GET", "/api/collections/audit_logs/records?perPage=50", { token: adminToken })
+      check("audit_logs terisi dari aksi §4", list.status === 200 && list.data?.totalItems > 0)
+      const items = list.data?.items || []
+      const regCreate = items.find((r) => r.action === "create" && r.entity === "users" && r.entity_id === aId)
+      check("audit create registrasi user A", !!regCreate, JSON.stringify(items.find((r) => r.action === "create" && r.entity === "users")))
+      check("diff create memuat full_name & bebas password", !!regCreate && regCreate.diff?.full_name?.new === "Pengguna A" && !("password" in (regCreate.diff || {})) && !("tokenKey" in (regCreate.diff || {})))
+      const loginAudit = items.find((r) => r.action === "login" && r.entity_id === aId)
+      check("audit login user A", !!loginAudit)
+      check("audit create scans milik A", items.some((r) => r.action === "create" && r.entity === "scans" && r.actor === aId))
+      const renameAudit = items.find((r) => r.action === "update" && r.entity === "users" && r.entity_id === aId)
+      check("audit update profil memuat diff kota", !!renameAudit && renameAudit.diff?.city?.new === "Bandung")
+      const hackerAudit = items.find((r) => r.action === "create" && r.entity === "users" && r.diff?.full_name?.new === "Hacker")
+      check("create yang DITOLAK rule tidak ter-audit", !hackerAudit)
+    }
+
+    // ── 7. guard login per-identitas (sprint 10) ──
+    console.log("[7] Guard login per-identitas (10 percobaan / 15 menit)")
+    {
+      const okC = await api("POST", "/api/collections/users/records", {
+        body: { email: "c@ekoteologi.id", password: "RahasiaKu123", passwordConfirm: "RahasiaKu123", full_name: "Pengguna C" },
+      })
+      check("registrasi user C", okC.status === 200)
+      let last = null
+      for (let i = 0; i < 5; i++) {
+        last = await api("POST", "/api/collections/users/auth-with-password", { body: { identity: "c@ekoteologi.id", password: "SalahBes123" } })
+      }
+      check("5 gagal sandi → tetap 400 (belum dikunci)", last.status === 400, `status ${last.status}`)
+      const okLogin = await api("POST", "/api/collections/users/auth-with-password", { body: { identity: "c@ekoteologi.id", password: "RahasiaKu123" } })
+      check("login sukses masih diizinkan", okLogin.status === 200)
+      let blocked = null
+      for (let i = 0; i < 10; i++) {
+        blocked = await api("POST", "/api/collections/users/auth-with-password", { body: { identity: "c@ekoteologi.id", password: "SalahBes123" } })
+      }
+      check("percobaan ke-10 setelah reset masih 400", blocked.status === 400, `status ${blocked.status}`)
+      blocked = await api("POST", "/api/collections/users/auth-with-password", { body: { identity: "c@ekoteologi.id", password: "SalahBes123" } })
+      check("percobaan ke-11 dikunci → 429", blocked.status === 429, `status ${blocked.status} ${JSON.stringify(blocked.data)}`)
+      check("pesan 429 berbahasa Indonesia ramah", typeof blocked.data?.message === "string" && blocked.data.message.includes("percobaan masuk"))
+      const failed = await api("GET", "/api/collections/audit_logs/records?filter=" + encodeURIComponent("action = 'login_failed' && entity_id = 'c@ekoteologi.id'"), { token: adminToken })
+      check("percobaan diblokir ter-audit (login_failed rate_limited)", failed.status === 200 && failed.data?.totalItems > 0 && failed.data.items[0].diff?.reason === "rate_limited")
+      // identitas lain tidak ikut terkunci (guard per-identitas, bukan global)
+      const other = await api("POST", "/api/collections/users/auth-with-password", { body: { identity: "a@ekoteologi.id", password: "RahasiaKu123" } })
+      check("identitas lain tidak terbawa blokir", other.status === 200)
+    }
+
+    // ── 8. autodate & oauth2 (sprint 10) ──
+    console.log("[8] Autodate koleksi & status OAuth2")
+    {
+      const scan = await api("GET", `/api/collections/scans/records/${ownScanId}`, { token: aToken })
+      check("record punya created/updated (autodate bootstrap)", scan.status === 200 && !!scan.data?.created && !!scan.data?.updated, JSON.stringify({ created: scan.data?.created }))
+      const usersCol = await api("GET", "/api/collections/users", { token: suToken })
+      check("tanpa env GOOGLE_*: oauth2 users nonaktif", usersCol.status === 200 && usersCol.data?.oauth2?.enabled === false)
     }
 
     console.log(`\nHasil: ${passed} PASS, ${failed} FAIL`)

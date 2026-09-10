@@ -4,7 +4,7 @@
 PB_VERSION := 0.40.3
 PB_ARCH := $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 
-.PHONY: help pb-install pb-serve pb-superuser pb-test pb-smoke \
+.PHONY: help pb-install pb-serve pb-superuser pb-test pb-e2e pb-smoke \
         admin-install admin-dev admin-build mobile-install mobile-dev mobile-build apk
 
 help:
@@ -18,8 +18,10 @@ pb-serve: ## Serve PocketBase lokal (http://127.0.0.1:8090, dashboard /_/)
 	cd pocketbase && ./pocketbase serve
 pb-superuser: ## Buat/perbarui superuser dari env PB_SUPERUSER_* (default admin@ekoteologi.id/ekoteologi123)
 	cd pocketbase && ./pocketbase superuser upsert "$${PB_SUPERUSER_EMAIL:-admin@ekoteologi.id}" "$${PB_SUPERUSER_PASSWORD:-ekoteologi123}"
-pb-test: ## Verifikasi skema + seed + rules (instance uji sekali pakai; butuh pb-install)
+pb-test: ## Verifikasi skema + seed + rules + audit (instance uji sekali pakai; butuh pb-install)
 	node pocketbase/scripts/test.mjs
+pb-e2e: ## E2E alur klien SDK (auth/profil/misi/verifikasi) terhadap instance uji; butuh pb-install
+	node pocketbase/scripts/e2e-sdk.mjs
 pb-smoke: ## Smoke: boot instance uji + cek /api/health & /api/ekoteologi/ping (butuh pb-install)
 	node pocketbase/scripts/smoke.mjs
 

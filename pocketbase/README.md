@@ -7,7 +7,7 @@ Backend sejak **Sprint 9** (migrasi dari FastAPI — riwayat di tag git
 |---|---|
 | `pb_migrations/` | Skema koleksi + seed (JS, jalan otomatis saat `serve`) |
 | `pb_hooks/` | Route kustom & guard hook (JSVM — tanpa API Node/npm) |
-| `scripts/` | `test.mjs` (verifikasi skema+rules), `smoke.mjs` (health) |
+| `scripts/` | `test.mjs` (verifikasi skema+rules), `e2e-sdk.mjs` (alur klien SDK), `smoke.mjs` (health) |
 | `pb_data/` | SQLite + storage (di-gitignore, di-volume-kan saat deploy) |
 | `pocketbase` | Binary v**0.40.3** (di-pin — keputusan M1; di-gitignore; `make pb-install`) |
 
@@ -40,8 +40,19 @@ auth-with-password`, file: `/api/files/{koleksi}/{id}/{filename}`, realtime SSE:
 |---|---|---|
 | `GET /api/ekoteologi/ping` | publik | name/version/time — dipakai smoke CI |
 
-Route bisnis menyusul: scan AI (sprint 11), klaim/verifikasi (sprint 12),
-kuis & notif (sprint 13).
+Hook sprint 10 (auth, profil & audit — pengganti middleware FastAPI):
+
+- **Audit log** — setiap create/update/delete koleksi bisnis + login sukses
+  (dan percobaan masuk yang diblokir) tercatat di `audit_logs` (tulis konteks
+  sistem, baca admin) via `onRecord{Create,Update,Delete}Request` +
+  `onRecordAuthRequest`. Field sensitif (`password`, `tokenKey`) tidak
+  pernah ikut dalam `diff`.
+- **Guard login per-identitas** — 10 percobaan / 15 menit / email (login
+  sukses mereset), hitungan di `app_settings` (`login_guard:{email}`); blokir
+  = 429 berbahasa Indonesia + audit `login_failed rate_limited`.
+
+Route bisnis menyusul: scan AI (sprint 11), klaim/verifikasi + ledger
+(sprint 12), kuis & notif (sprint 13).
 
 ### Koleksi (port `api/app/models/*` — PRD §5)
 
@@ -94,9 +105,23 @@ koleksi sistem `_authOrigins` (OAuth2 Google bawaan, sprint 10).
 ## Verifikasi
 
 ```bash
-node pocketbase/scripts/test.mjs   # 42 asersi: skema, seed, rules, guard hook
-node pocketbase/scripts/smoke.mjs  # health + ping
+node pocketbase/scripts/test.mjs    # 65 asersi: skema, seed, rules, audit, rate limit, guard login
+node pocketbase/scripts/e2e-sdk.mjs # 19 asersi E2E alur klien SDK (auth, profil, misi, verifikasi)
+node pocketbase/scripts/smoke.mjs   # health + ping
 ```
+
+## Settings bootstrap (sprint 10)
+
+Migrasi `1757500000_settings_bootstrap.js` (jalan otomatis saat serve):
+
+1. **Rate limit** (pengganti middleware Redis — nilai setara kebijakan PRD §6):
+   `users:authWithPassword` 30/15 menit/IP, `users:authRefresh` 60/menit/IP,
+   `users:create` 20/jam/IP, pelindung global `/api/` 300/10 dtk/IP. Rate
+   limiter PB hanya per-IP; proteksi per-identitas ada di guard hook.
+2. **Autodate `created`/`updated`** ditambahkan ke seluruh koleksi non-sistem
+   (temuan v0.40: koleksi bawaan tidak lagi menyertakannya).
+3. **OAuth2 Google** pada koleksi `users` — aktif hanya bila env
+   `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET` terisi (lihat `.env.example`).
 
 ## Catatan upgrade
 
